@@ -1,0 +1,53 @@
+# CMake
+build/
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# Visual Studio / Windows
+.vs/
+*.user
+*.suo
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.ilk
+*.pdb
+*.exp
+*.lib
+*.obj
+*.log
+*.idb
+*.tlog
+*.lastbuildstate
+
+# JUCE Specific / IDEs
+JuceLibraryCode/
+*.jucer
+.idea/
+.vscode/
+
+# Build Artefacts (if compiled outside of build/)
+*.exe
+*.dll
+*.vst3
+*.aaxplugin
+*.component
+*.so
+*.dylib
+*.a
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
