@@ -82,6 +82,18 @@ void MondoEqRefAudioProcessor::changeProgramName (int index, const juce::String&
 
 void MondoEqRefAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
+    juce::dsp::ProcessSpec spec;
+    spec.sampleRate = sampleRate;
+    spec.maximumBlockSize = samplesPerBlock;
+    spec.numChannels = getTotalNumInputChannels();
+
+    preFilter.state = juce::dsp::IIR::Coefficients<float>::makeHighShelf(sampleRate, 1681.97f, 0.7071f, juce::Decibels::decibelsToGain(4.0f));
+    preFilter.prepare(spec);
+
+    rlbFilter.state = juce::dsp::IIR::Coefficients<float>::makeHighPass(sampleRate, 38.1355f, 0.5f);
+    rlbFilter.prepare(spec);
+    
+    resetLufs();
 }
 
 void MondoEqRefAudioProcessor::releaseResources()
@@ -123,6 +135,33 @@ void MondoEqRefAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         {
             pushNextSampleIntoFifo(channelData[i]);
         }
+        
+        // LUFS Calculation (EBU R 128)
+        juce::AudioBuffer<float> lufsBuffer;
+        lufsBuffer.makeCopyOf(buffer);
+        juce::dsp::AudioBlock<float> block(lufsBuffer);
+        juce::dsp::ProcessContextReplacing<float> context(block);
+        
+        preFilter.process(context);
+        rlbFilter.process(context);
+        
+        double blockSumSquares = 0.0;
+        int numChannels = lufsBuffer.getNumChannels();
+        int numSamples = lufsBuffer.getNumSamples();
+        
+        for (int ch = 0; ch < numChannels; ++ch) {
+            auto* readPtr = lufsBuffer.getReadPointer(ch);
+            for (int i = 0; i < numSamples; ++i) {
+                blockSumSquares += readPtr[i] * readPtr[i];
+            }
+        }
+        
+        // Accumulate in thread-safe manner
+        double currentSum = lufsSumSquares.load(std::memory_order_relaxed);
+        while (!lufsSumSquares.compare_exchange_weak(currentSum, currentSum + blockSumSquares, std::memory_order_release, std::memory_order_relaxed));
+        
+        int64_t currentCount = lufsSampleCount.load(std::memory_order_relaxed);
+        while (!lufsSampleCount.compare_exchange_weak(currentCount, currentCount + numSamples, std::memory_order_release, std::memory_order_relaxed));
     }
 }
 

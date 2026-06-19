@@ -29,8 +29,9 @@ private:
     void loadTargets();
     void targetRoleChanged();
 
+    struct PresetPoint { float f; float target; float maxLimit; float minLimit; };
     struct PresetBand { float minFreq; float maxFreq; int targetMin; int targetMax; juce::String name; juce::Colour color; };
-    struct PresetTarget { juce::String name; std::vector<PresetBand> bands; };
+    struct PresetTarget { juce::String name; std::vector<PresetBand> bands; std::vector<PresetPoint> points; };
     
     std::vector<PresetTarget> presets;
     int currentPresetIndex = 0;
@@ -44,6 +45,9 @@ private:
     juce::Label targetRoleLabel;
 
     juce::TextButton resetButton;
+    
+    juce::Label lufsLabel;
+    juce::TextButton lufsResetButton;
 
     int currentFftOrder = 11; // 2^11 = 2048
     int currentFftSize = 2048;

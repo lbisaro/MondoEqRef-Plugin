@@ -32,6 +32,17 @@ MondoEqRefAudioProcessorEditor::MondoEqRefAudioProcessorEditor (MondoEqRefAudioP
     };
     addAndMakeVisible(resetButton);
 
+    lufsLabel.setText("LUFS: --", juce::dontSendNotification);
+    lufsLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    lufsLabel.setFont(juce::Font(16.0f, juce::Font::bold));
+    addAndMakeVisible(lufsLabel);
+
+    lufsResetButton.setButtonText("Reset LUFS");
+    lufsResetButton.onClick = [this] {
+        audioProcessor.resetLufs();
+    };
+    addAndMakeVisible(lufsResetButton);
+
     setResizable(true, true);
 
     updateFftSize();
@@ -65,7 +76,6 @@ void MondoEqRefAudioProcessorEditor::loadTargets()
                 if (presetsArray.isArray())
                 {
                     auto* arr = presetsArray.getArray();
-                    int presetId = 2; // Start from 2 since 1 is "None"
                     for (auto& item : *arr)
                     {
                         if (item.isObject())
@@ -95,9 +105,36 @@ void MondoEqRefAudioProcessorEditor::loadTargets()
                                 }
                             }
                             
+                            auto pointsProp = presetObj->getProperty("frequency_points");
+                            if (pointsProp.isArray())
+                            {
+                                auto* pointsArr = pointsProp.getArray();
+                                for (auto& pItem : *pointsArr)
+                                {
+                                    if (pItem.isObject())
+                                    {
+                                        auto* pObj = pItem.getDynamicObject();
+                                        PresetPoint pt;
+                                        pt.f = float(pObj->getProperty("f"));
+                                        pt.target = float(pObj->getProperty("target"));
+                                        pt.maxLimit = float(pObj->getProperty("max_limit"));
+                                        pt.minLimit = float(pObj->getProperty("min_limit"));
+                                        target.points.push_back(pt);
+                                    }
+                                }
+                            }
+                            
                             presets.push_back(target);
-                            targetRoleBox.addItem(target.name, presetId++);
                         }
+                    }
+                    
+                    std::sort(presets.begin(), presets.end(), [](const PresetTarget& a, const PresetTarget& b) {
+                        return a.name.compareIgnoreCase(b.name) < 0;
+                    });
+                    
+                    int presetId = 2; // Start from 2 since 1 is "None"
+                    for (const auto& p : presets) {
+                        targetRoleBox.addItem(p.name, presetId++);
                     }
                 }
             }
@@ -105,7 +142,7 @@ void MondoEqRefAudioProcessorEditor::loadTargets()
     }
     
     targetRoleBox.setSelectedId(1, juce::dontSendNotification);
-    currentPresetIndex = 0; // 0 will mean "None"
+    currentPresetIndex = -1; // -1 will mean "None"
 }
 
 
@@ -156,6 +193,13 @@ void MondoEqRefAudioProcessorEditor::timerCallback()
         drawNextFrameOfSpectrum();
         nextFFTBlockReady = false;
         repaint();
+    }
+    
+    float lufs = audioProcessor.getIntegratedLufs();
+    if (lufs <= -99.9f) {
+        lufsLabel.setText("LUFS: --", juce::dontSendNotification);
+    } else {
+        lufsLabel.setText(juce::String::formatted("LUFS: %.1f", lufs), juce::dontSendNotification);
     }
 }
 
@@ -213,9 +257,9 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
     float skewFactor = 1.5f;
 
     // 1. Draw Target Ranges
-    if (currentPresetIndex > 0 && currentPresetIndex <= presets.size())
+    if (currentPresetIndex >= 0 && currentPresetIndex < presets.size())
     {
-        const auto& target = presets[currentPresetIndex - 1];
+        const auto& target = presets[currentPresetIndex];
         
         // Calculate dynamic Min and Max between 100Hz and 16kHz
         float globalMinDb = 1000.0f;
@@ -237,6 +281,102 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
         if (globalMaxDb <= globalMinDb) {
             globalMinDb = -100.0f;
             globalMaxDb = 0.0f;
+        }
+
+        // --- Draw Frequency Points Target Curves (Spline) ---
+        if (!target.points.empty())
+        {
+            auto catmullRom = [](float t, float p0, float p1, float p2, float p3) {
+                return 0.5f * (
+                    (2.0f * p1) +
+                    (-p0 + p2) * t +
+                    (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3) * t * t +
+                    (-p0 + 3.0f * p1 - 3.0f * p2 + p3) * t * t * t
+                );
+            };
+
+            auto generateSplinePoints = [&](const std::vector<juce::Point<float>>& pts) {
+                std::vector<juce::Point<float>> result;
+                if (pts.empty()) return result;
+                if (pts.size() < 3) return pts; // Not enough points for spline
+
+                result.push_back(pts.front());
+                for (size_t i = 0; i < pts.size() - 1; ++i) {
+                    auto p0 = pts[i == 0 ? 0 : i - 1];
+                    auto p1 = pts[i];
+                    auto p2 = pts[i + 1];
+                    auto p3 = pts[i + 2 >= pts.size() ? pts.size() - 1 : i + 2];
+                    
+                    int numSteps = 20;
+                    for (int step = 1; step <= numSteps; ++step) {
+                        float t = (float)step / (float)numSteps;
+                        float x = catmullRom(t, p0.x, p1.x, p2.x, p3.x);
+                        float y = catmullRom(t, p0.y, p1.y, p2.y, p3.y);
+                        result.push_back({x, y});
+                    }
+                }
+                return result;
+            };
+
+            std::vector<juce::Point<float>> targetPts, maxPts, minPts;
+            for (const auto& pt : target.points) {
+                if (pt.f < minFreq || pt.f > maxFreq) continue;
+                float normX = (std::log10(pt.f) - minLogFreq) / (maxLogFreq - minLogFreq);
+                float x = left + width * std::pow(normX, skewFactor);
+
+                float tilt = 4.5f * std::log2(pt.f / 1000.0f);
+                float tiltedTarget = pt.target > -99.9f ? pt.target + tilt : -100.0f;
+                float tiltedMax = pt.maxLimit > -99.9f ? pt.maxLimit + tilt : -100.0f;
+                float tiltedMin = pt.minLimit > -99.9f ? pt.minLimit + tilt : -100.0f;
+
+                float targetY = bottom - juce::jmap(tiltedTarget, minDecibels, maxDecibels, 0.0f, 1.0f) * height;
+                float maxY = bottom - juce::jmap(tiltedMax, minDecibels, maxDecibels, 0.0f, 1.0f) * height;
+                float minY = bottom - juce::jmap(tiltedMin, minDecibels, maxDecibels, 0.0f, 1.0f) * height;
+                
+                targetPts.push_back({x, targetY});
+                maxPts.push_back({x, maxY});
+                minPts.push_back({x, minY});
+            }
+
+            auto smoothTarget = generateSplinePoints(targetPts);
+            auto smoothMax = generateSplinePoints(maxPts);
+            auto smoothMin = generateSplinePoints(minPts);
+
+            if (!smoothTarget.empty()) {
+                // 1. Draw Shaded Area (between max and min)
+                juce::Path shadedPath;
+                shadedPath.startNewSubPath(smoothMax.front());
+                for (size_t i = 1; i < smoothMax.size(); ++i) {
+                    shadedPath.lineTo(smoothMax[i]);
+                }
+                for (int i = (int)smoothMin.size() - 1; i >= 0; --i) {
+                    shadedPath.lineTo(smoothMin[i]);
+                }
+                shadedPath.closeSubPath();
+
+                g.setColour(juce::Colours::lightgreen.withAlpha(0.1f));
+                g.fillPath(shadedPath);
+
+                // 2. Draw Target Line
+                juce::Path targetPath;
+                targetPath.startNewSubPath(smoothTarget.front());
+                for (size_t i = 1; i < smoothTarget.size(); ++i) {
+                    targetPath.lineTo(smoothTarget[i]);
+                }
+                g.setColour(juce::Colours::lightgreen.withAlpha(0.6f));
+                g.strokePath(targetPath, juce::PathStrokeType(2.0f));
+                
+                // 3. Draw Min/Max Boundary Lines
+                juce::Path maxPath, minPath;
+                maxPath.startNewSubPath(smoothMax.front());
+                minPath.startNewSubPath(smoothMin.front());
+                for (size_t i = 1; i < smoothMax.size(); ++i) maxPath.lineTo(smoothMax[i]);
+                for (size_t i = 1; i < smoothMin.size(); ++i) minPath.lineTo(smoothMin[i]);
+                
+                g.setColour(juce::Colours::lightgreen.withAlpha(0.2f));
+                g.strokePath(maxPath, juce::PathStrokeType(1.0f));
+                g.strokePath(minPath, juce::PathStrokeType(1.0f));
+            }
         }
 
         struct LabelPos { float x; float bottomY; float topY; };
@@ -566,6 +706,9 @@ void MondoEqRefAudioProcessorEditor::resized()
     targetRoleBox.setBounds(targetRoleLabel.getRight() + 5, 5, 200, 20);
 
     resetButton.setBounds(targetRoleBox.getRight() + 20, 5, 100, 20);
+    
+    lufsResetButton.setBounds(resetButton.getRight() + 20, 5, 100, 20);
+    lufsLabel.setBounds(lufsResetButton.getRight() + 10, 5, 120, 20);
 }
 
 void MondoEqRefAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
