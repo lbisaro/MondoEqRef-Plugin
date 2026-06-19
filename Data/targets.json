@@ -1,0 +1,326 @@
+{
+  "presets": [
+    {
+      "name": "GTR AMBIENT",
+      "bands": [
+        {
+          "name": "Body",
+          "minFreq": 100.0,
+          "maxFreq": 500.0,
+          "targetMin": 20,
+          "targetMax": 40,
+          "color": "ff00ff00"
+        },
+        {
+          "name": "Brightness",
+          "minFreq": 600.0,
+          "maxFreq": 1500.0,
+          "targetMin": 70,
+          "targetMax": 90,
+          "color": "ff00ffff"
+        },
+        {
+          "name": "Cut",
+          "minFreq": 2000.0,
+          "maxFreq": 5000.0,
+          "targetMin": 10,
+          "targetMax": 30,
+          "color": "ffff0000"
+        }
+      ]
+    },
+    {
+      "name": "GTR RHYTHM",
+      "bands": [
+        {
+          "name": "Body",
+          "minFreq": 100.0,
+          "maxFreq": 500.0,
+          "targetMin": 70,
+          "targetMax": 90,
+          "color": "ff00ff00"
+        },
+        {
+          "name": "Brightness",
+          "minFreq": 1200.0,
+          "maxFreq": 2000.0,
+          "targetMin": 40,
+          "targetMax": 60,
+          "color": "ff00ffff"
+        },
+        {
+          "name": "Cut",
+          "minFreq": 2000.0,
+          "maxFreq": 5000.0,
+          "targetMin": 40,
+          "targetMax": 60,
+          "color": "ffff0000"
+        }
+      ]
+    },
+    {
+      "name": "GTR LEAD",
+      "bands": [
+        {
+          "name": "Body",
+          "minFreq": 100.0,
+          "maxFreq": 500.0,
+          "targetMin": 30,
+          "targetMax": 50,
+          "color": "ff00ff00"
+        },
+        {
+          "name": "Brightness",
+          "minFreq": 1900.0,
+          "maxFreq": 2700.0,
+          "targetMin": 50,
+          "targetMax": 70,
+          "color": "ff00ffff"
+        },
+        {
+          "name": "Cut",
+          "minFreq": 2000.0,
+          "maxFreq": 5000.0,
+          "targetMin": 80,
+          "targetMax": 100,
+          "color": "ffff0000"
+        }
+      ]
+    },
+    {
+      "name": "BAJO",
+      "bands": [
+        {
+          "name": "Peso",
+          "minFreq": 40.0,
+          "maxFreq": 100.0,
+          "targetMin": 80,
+          "targetMax": 100,
+          "color": "ff0066cc"
+        },
+        {
+          "name": "Medio",
+          "minFreq": 300.0,
+          "maxFreq": 800.0,
+          "targetMin": 40,
+          "targetMax": 60,
+          "color": "ff00ccff"
+        },
+        {
+          "name": "Slap",
+          "minFreq": 1500.0,
+          "maxFreq": 2500.0,
+          "targetMin": 20,
+          "targetMax": 40,
+          "color": "ff99ccff"
+        },
+        {
+          "name": "Brillo",
+          "minFreq": 5000.0,
+          "maxFreq": 10000.0,
+          "targetMin": 10,
+          "targetMax": 30,
+          "color": "ffffffff"
+        }
+      ]
+    },
+    {
+      "name": "BOMBO",
+      "bands": [
+        {
+          "name": "Golpe",
+          "minFreq": 40.0,
+          "maxFreq": 80.0,
+          "targetMin": 80,
+          "targetMax": 100,
+          "color": "ffff9900"
+        },
+        {
+          "name": "Carton",
+          "minFreq": 300.0,
+          "maxFreq": 500.0,
+          "targetMin": 20,
+          "targetMax": 40,
+          "color": "ffffcc00"
+        },
+        {
+          "name": "Brillo",
+          "minFreq": 3000.0,
+          "maxFreq": 8000.0,
+          "targetMin": 50,
+          "targetMax": 70,
+          "color": "ffffff00"
+        }
+      ]
+    },
+    {
+      "name": "REDOBLANTE",
+      "bands": [
+        {
+          "name": "Peso",
+          "minFreq": 100.0,
+          "maxFreq": 250.0,
+          "targetMin": 70,
+          "targetMax": 90,
+          "color": "ffcc0099"
+        },
+        {
+          "name": "Caja",
+          "minFreq": 300.0,
+          "maxFreq": 500.0,
+          "targetMin": 40,
+          "targetMax": 60,
+          "color": "ffff66cc"
+        },
+        {
+          "name": "Medio",
+          "minFreq": 800.0,
+          "maxFreq": 1500.0,
+          "targetMin": 20,
+          "targetMax": 40,
+          "color": "ffff99cc"
+        },
+        {
+          "name": "Brillo",
+          "minFreq": 4000.0,
+          "maxFreq": 6000.0,
+          "targetMin": 80,
+          "targetMax": 100,
+          "color": "ffffccff"
+        },
+        {
+          "name": "Aire",
+          "minFreq": 10000.0,
+          "maxFreq": 15000.0,
+          "targetMin": 40,
+          "targetMax": 60,
+          "color": "ffffffff"
+        }
+      ]
+    },
+    {
+      "name": "HI HAT",
+      "bands": [
+        {
+          "name": "Cuerpo",
+          "minFreq": 300.0,
+          "maxFreq": 500.0,
+          "targetMin": 10,
+          "targetMax": 30,
+          "color": "ffff3333"
+        },
+        {
+          "name": "Agudo",
+          "minFreq": 5000.0,
+          "maxFreq": 8000.0,
+          "targetMin": 80,
+          "targetMax": 100,
+          "color": "ffff6666"
+        },
+        {
+          "name": "Aire",
+          "minFreq": 10000.0,
+          "maxFreq": 15000.0,
+          "targetMin": 40,
+          "targetMax": 60,
+          "color": "ffff9999"
+        }
+      ]
+    },
+    {
+      "name": "PLATOS",
+      "bands": [
+        {
+          "name": "Cuerpo",
+          "minFreq": 300.0,
+          "maxFreq": 600.0,
+          "targetMin": 20,
+          "targetMax": 40,
+          "color": "ff009933"
+        },
+        {
+          "name": "Campana",
+          "minFreq": 2000.0,
+          "maxFreq": 4000.0,
+          "targetMin": 50,
+          "targetMax": 70,
+          "color": "ff33cc33"
+        },
+        {
+          "name": "Sobretonos",
+          "minFreq": 8000.0,
+          "maxFreq": 15000.0,
+          "targetMin": 80,
+          "targetMax": 100,
+          "color": "ff99ff99"
+        }
+      ]
+    },
+    {
+      "name": "PIANO",
+      "bands": [
+        {
+          "name": "Grave",
+          "minFreq": 80.0,
+          "maxFreq": 150.0,
+          "targetMin": 40,
+          "targetMax": 60,
+          "color": "ff9900cc"
+        },
+        {
+          "name": "Presencia",
+          "minFreq": 3000.0,
+          "maxFreq": 5000.0,
+          "targetMin": 70,
+          "targetMax": 90,
+          "color": "ffcc66ff"
+        },
+        {
+          "name": "Sobretonos",
+          "minFreq": 8000.0,
+          "maxFreq": 15000.0,
+          "targetMin": 50,
+          "targetMax": 70,
+          "color": "ffddaaff"
+        }
+      ]
+    },
+    {
+      "name": "VOZ PRINCIPAL",
+      "bands": [
+        {
+          "name": "Fundamental",
+          "minFreq": 100.0,
+          "maxFreq": 300.0,
+          "targetMin": 60,
+          "targetMax": 80,
+          "color": "ffcc3300"
+        },
+        {
+          "name": "Cuerpo",
+          "minFreq": 300.0,
+          "maxFreq": 500.0,
+          "targetMin": 40,
+          "targetMax": 60,
+          "color": "ffff6633"
+        },
+        {
+          "name": "Presencia",
+          "minFreq": 3000.0,
+          "maxFreq": 5000.0,
+          "targetMin": 80,
+          "targetMax": 100,
+          "color": "ffff9966"
+        },
+        {
+          "name": "Aire",
+          "minFreq": 10000.0,
+          "maxFreq": 15000.0,
+          "targetMin": 60,
+          "targetMax": 80,
+          "color": "ffffcc99"
+        }
+      ]
+    }
+  ]
+}
