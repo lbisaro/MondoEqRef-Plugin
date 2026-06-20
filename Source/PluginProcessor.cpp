@@ -162,9 +162,31 @@ void MondoEqRefAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         
         int64_t currentCount = lufsSampleCount.load(std::memory_order_relaxed);
         while (!lufsSampleCount.compare_exchange_weak(currentCount, currentCount + numSamples, std::memory_order_release, std::memory_order_relaxed));
+
+        // Short-Term LUFS accumulation
+        int maxSamplesPerBlock = (int)(getSampleRate() * 0.1); // ~100ms per block
+        if (maxSamplesPerBlock < 128) maxSamplesPerBlock = 4800; // fallback
+
+        auto& currentBlock = shortTermBlocks[shortTermBlockIndex];
+        currentBlock.sumSquares += blockSumSquares;
+        currentBlock.samples += numSamples;
+
+        if (currentBlock.samples >= maxSamplesPerBlock) {
+            shortTermBlockIndex = (shortTermBlockIndex + 1) % shortTermBlocks.size();
+            shortTermBlocks[shortTermBlockIndex].sumSquares = 0.0;
+            shortTermBlocks[shortTermBlockIndex].samples = 0;
+        }
+
+        double totalSTSum = 0.0;
+        int64_t totalSTSamples = 0;
+        for (const auto& b : shortTermBlocks) {
+            totalSTSum += b.sumSquares;
+            totalSTSamples += b.samples;
+        }
+        shortTermSumSquares.store(totalSTSum, std::memory_order_relaxed);
+        shortTermSampleCount.store(totalSTSamples, std::memory_order_relaxed);
     }
 }
-
 void MondoEqRefAudioProcessor::pushNextSampleIntoFifo (float sample)
 {
     auto idx = fifoIndex.load();

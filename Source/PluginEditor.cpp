@@ -4,7 +4,7 @@
 MondoEqRefAudioProcessorEditor::MondoEqRefAudioProcessorEditor (MondoEqRefAudioProcessor& p)
     : AudioProcessorEditor (&p), audioProcessor (p)
 {
-    setSize (800, 450);
+    setSize (940, 450);
 
     fftSizeLabel.setText("FFT Size:", juce::dontSendNotification);
     fftSizeLabel.setColour(juce::Label::textColourId, juce::Colours::white);
@@ -25,24 +25,31 @@ MondoEqRefAudioProcessorEditor::MondoEqRefAudioProcessorEditor (MondoEqRefAudioP
     targetRoleBox.onChange = [this]() { targetRoleChanged(); };
     addAndMakeVisible(targetRoleBox);
 
-    resetButton.setButtonText("Reset Peak");
+    resetButton.setButtonText("Reset");
     resetButton.onClick = [this] {
         std::fill(representativeCurve.begin(), representativeCurve.end(), 0.0f);
+        audioProcessor.resetLufs();
         repaint();
     };
     addAndMakeVisible(resetButton);
 
-    lufsLabel.setText("LUFS: --", juce::dontSendNotification);
-    lufsLabel.setColour(juce::Label::textColourId, juce::Colours::white);
-    lufsLabel.setFont(juce::Font(16.0f, juce::Font::bold));
-    addAndMakeVisible(lufsLabel);
-
-    lufsResetButton.setButtonText("Reset LUFS");
-    lufsResetButton.onClick = [this] {
-        audioProcessor.resetLufs();
+    tiltButton.setToggleState(true, juce::dontSendNotification);
+    tiltButton.onClick = [this] {
+        isTiltEnabled = tiltButton.getToggleState();
+        repaint();
     };
-    addAndMakeVisible(lufsResetButton);
+    addAndMakeVisible(tiltButton);
 
+    targetOffsetSlider.setRange(-50.0, 50.0, 0.5);
+    targetOffsetSlider.setValue(0.0, juce::dontSendNotification);
+    targetOffsetSlider.setDoubleClickReturnValue(true, 0.0);
+    targetOffsetSlider.onValueChange = [this] {
+        currentTargetOffset = targetOffsetSlider.getValue();
+        repaint();
+    };
+    addAndMakeVisible(targetOffsetSlider);
+
+    setWantsKeyboardFocus(true);
     setResizable(true, true);
 
     updateFftSize();
@@ -83,6 +90,7 @@ void MondoEqRefAudioProcessorEditor::loadTargets()
                             auto* presetObj = item.getDynamicObject();
                             PresetTarget target;
                             target.name = presetObj->getProperty("name").toString();
+                            if (presetObj->hasProperty("lufs")) target.targetLufs = float(presetObj->getProperty("lufs"));
                             
                             auto bandsProp = presetObj->getProperty("bands");
                             if (bandsProp.isArray())
@@ -95,10 +103,9 @@ void MondoEqRefAudioProcessorEditor::loadTargets()
                                         auto* bObj = bandItem.getDynamicObject();
                                         PresetBand band;
                                         band.name = bObj->getProperty("name").toString();
-                                        band.minFreq = float(bObj->getProperty("minFreq"));
-                                        band.maxFreq = float(bObj->getProperty("maxFreq"));
-                                        if (bObj->hasProperty("targetMin")) band.targetMin = (int)bObj->getProperty("targetMin"); else band.targetMin = 0;
-                                        if (bObj->hasProperty("targetMax")) band.targetMax = (int)bObj->getProperty("targetMax"); else band.targetMax = 100;
+                                        band.minFreq = float(bObj->getProperty("min"));
+                                        band.maxFreq = float(bObj->getProperty("max"));
+                                        if (bObj->hasProperty("tip")) band.tip = bObj->getProperty("tip").toString(); else band.tip = "";
                                         band.color = juce::Colour::fromString(bObj->getProperty("color").toString());
                                         target.bands.push_back(band);
                                     }
@@ -194,13 +201,6 @@ void MondoEqRefAudioProcessorEditor::timerCallback()
         nextFFTBlockReady = false;
         repaint();
     }
-    
-    float lufs = audioProcessor.getIntegratedLufs();
-    if (lufs <= -99.9f) {
-        lufsLabel.setText("LUFS: --", juce::dontSendNotification);
-    } else {
-        lufsLabel.setText(juce::String::formatted("LUFS: %.1f", lufs), juce::dontSendNotification);
-    }
 }
 
 void MondoEqRefAudioProcessorEditor::pushNextSampleIntoFifo (float sample) noexcept
@@ -239,7 +239,11 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
 {
     g.fillAll (juce::Colour::fromString("ff252526")); // Dark background
 
-    auto plotArea = getLocalBounds();
+    auto fullArea = getLocalBounds();
+    auto meterArea = fullArea.removeFromRight(100).withTrimmedTop(40).withTrimmedBottom(20);
+    auto leftArea = fullArea.removeFromLeft(40).withTrimmedTop(40).withTrimmedBottom(20);
+    
+    auto plotArea = fullArea;
     plotArea.removeFromTop(40); // header
     plotArea.removeFromRight(40); // dB scale
     plotArea.removeFromBottom(20); // Freq scale
@@ -324,10 +328,10 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
                 float normX = (std::log10(pt.f) - minLogFreq) / (maxLogFreq - minLogFreq);
                 float x = left + width * std::pow(normX, skewFactor);
 
-                float tilt = 4.5f * std::log2(pt.f / 1000.0f);
-                float tiltedTarget = pt.target > -99.9f ? pt.target + tilt : -100.0f;
-                float tiltedMax = pt.maxLimit > -99.9f ? pt.maxLimit + tilt : -100.0f;
-                float tiltedMin = pt.minLimit > -99.9f ? pt.minLimit + tilt : -100.0f;
+                float tilt = isTiltEnabled ? 4.5f * std::log2(pt.f / 1000.0f) : 0.0f;
+                float tiltedTarget = pt.target + tilt + currentTargetOffset;
+                float tiltedMax = pt.maxLimit + tilt + currentTargetOffset;
+                float tiltedMin = pt.minLimit + tilt + currentTargetOffset;
 
                 float targetY = bottom - juce::jmap(tiltedTarget, minDecibels, maxDecibels, 0.0f, 1.0f) * height;
                 float maxY = bottom - juce::jmap(tiltedMax, minDecibels, maxDecibels, 0.0f, 1.0f) * height;
@@ -379,8 +383,9 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
             }
         }
 
-        struct LabelPos { float x; float bottomY; float topY; };
-        std::vector<LabelPos> drawnLabels;
+
+        activeBandTooltips.clear();
+        std::vector<juce::Rectangle<float>> drawnBands;
 
         for (const auto& band : target.bands)
         {
@@ -390,97 +395,43 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
             float x1 = left + width * std::pow(normX1, skewFactor);
             float x2 = left + width * std::pow(normX2, skewFactor);
 
-            float targetMinDb = juce::jmap((float)band.targetMin, 0.0f, 100.0f, globalMinDb, globalMaxDb);
-            float targetMaxDb = juce::jmap((float)band.targetMax, 0.0f, 100.0f, globalMinDb, globalMaxDb);
+            float bandWidth = x2 - x1;
+            float bandHeight = 20.0f;
             
-            float yTop = bottom - juce::jmap(targetMaxDb, minDecibels, maxDecibels, 0.0f, 1.0f) * height;
-            float yBottom = bottom - juce::jmap(targetMinDb, minDecibels, maxDecibels, 0.0f, 1.0f) * height;
-
-            juce::Rectangle<float> bandRect(x1, yTop, x2 - x1, yBottom - yTop);
-            
-            // Draw Target Box background
-            g.setColour(band.color.withAlpha(0.12f));
-            g.fillRect(bandRect);
-            
-            // Draw Target Box borders
-            g.setColour(band.color.withAlpha(0.4f));
-            g.drawRect(bandRect, 1.0f);
-            
-            // Draw vertical guidelines
-            g.setColour(band.color.withAlpha(0.15f));
-            g.drawVerticalLine(juce::roundToInt(x1), (float)plotArea.getY(), bottom);
-            g.drawVerticalLine(juce::roundToInt(x2), (float)plotArea.getY(), bottom);
-
-            g.setColour(band.color.withAlpha(0.8f));
-            g.setFont(13.0f);
-            
-            // Calculate AVG dB for the band based on historical peaks
-            float avgDb = -100.0f;
-            int binCount = 0;
-            float sumDb = 0.0f;
-            
-            for (int i = 1; i < currentFftSize / 2; ++i)
-            {
-                float freq = (float)i * ((float)audioProcessor.getSampleRate() / (float)currentFftSize);
-                if (freq >= band.minFreq && freq <= band.maxFreq)
-                {
-                    float rawPeakDb = juce::Decibels::gainToDecibels(representativeCurve[i], -100.0f);
-                    float tilt = 4.5f * std::log2(freq / 1000.0f);
-                    float dbLevel = rawPeakDb > -99.9f ? rawPeakDb + tilt : -100.0f;
-                    sumDb += dbLevel;
-                    binCount++;
-                }
-            }
-            if (binCount > 0) avgDb = sumDb / binCount;
-            
-            int percentage = 0;
-            if (avgDb > -99.0f) {
-                float mapped = juce::jmap(avgDb, globalMinDb, globalMaxDb, 0.0f, 100.0f);
-                percentage = juce::roundToInt(juce::jlimit(0.0f, 100.0f, mapped));
-            }
-
-            juce::String avgText = avgDb > -99.0f ? juce::String(percentage) + "%" : "-";
-
-            g.setFont(15.0f);
-            int textWidth = juce::jmax(g.getCurrentFont().getStringWidth(band.name), g.getCurrentFont().getStringWidth(avgText));
-            int textHeight = 15;
-            
-            float startY = plotArea.getBottom() - 10.0f;
-            bool overlapped;
-            do {
-                overlapped = false;
-                for (const auto& lbl : drawnLabels) {
-                    if (std::abs(x1 - lbl.x) < 24.0f) {
-                        if (startY > lbl.topY - 10.0f && (startY - textWidth - 10.0f) < lbl.bottomY + 10.0f) {
-                            startY = lbl.topY - 10.0f;
-                            overlapped = true;
-                        }
+            float stackY = plotArea.getY() + 5.0f;
+            bool overlapping = true;
+            while (overlapping) {
+                overlapping = false;
+                juce::Rectangle<float> testRect(x1, stackY, bandWidth, bandHeight);
+                for (const auto& r : drawnBands) {
+                    if (testRect.intersects(r)) {
+                        overlapping = true;
+                        stackY += bandHeight + 4.0f;
+                        break;
                     }
                 }
-            } while(overlapped);
-
-            drawnLabels.push_back({x1, startY, startY - textWidth - 14.0f});
-
-            g.saveState();
-            // Move right to avoid overlapping the line, and use dynamic startY
-            g.addTransform(juce::AffineTransform::translation(x1 + 14, startY));
-            g.addTransform(juce::AffineTransform::rotation(-juce::MathConstants<float>::halfPi));
-            
-            // Draw background to improve readability
-            g.setColour(juce::Colour::fromString("ff252526").withAlpha(0.9f));
-            g.fillRect(-4, -textHeight - 2, textWidth + 14, textHeight * 2 + 4);
-            
-            // Draw text with conditional feedback color
-            if (percentage < band.targetMin) {
-                g.setColour(juce::Colours::cyan.withAlpha(0.9f));
-            } else if (percentage > band.targetMax) {
-                g.setColour(juce::Colours::red.withAlpha(0.9f));
-            } else {
-                g.setColour(juce::Colours::lightgreen.withAlpha(0.9f));
             }
-            g.drawText(band.name, 0, -textHeight, textWidth + 10, textHeight, juce::Justification::centredLeft, false);
-            g.drawText(avgText, 0, 0, textWidth + 10, textHeight, juce::Justification::centredLeft, false);
-            g.restoreState();
+            
+            juce::Rectangle<float> bandRect(x1, stackY, bandWidth, bandHeight);
+            drawnBands.push_back(bandRect);
+            
+            if (band.tip.isNotEmpty()) {
+                activeBandTooltips.push_back({bandRect, band.tip});
+            }
+            
+            g.setColour(band.color.withAlpha(0.6f));
+            g.fillRect(bandRect);
+            
+            g.setColour(band.color);
+            g.drawRect(bandRect, 1.0f);
+            
+            g.setColour(band.color.withAlpha(0.15f));
+            g.drawVerticalLine(juce::roundToInt(x1), stackY + bandHeight, bottom);
+            g.drawVerticalLine(juce::roundToInt(x2), stackY + bandHeight, bottom);
+
+            g.setColour(juce::Colours::white);
+            g.setFont(12.0f);
+            g.drawText(band.name, bandRect.toNearestInt(), juce::Justification::centred, true);
         }
     }
 
@@ -524,9 +475,11 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
     std::vector<float> pixelLiveMax(juce::roundToInt(width) + 1, -100.0f);
     std::vector<float> pixelPeakMax(juce::roundToInt(width) + 1, -100.0f);
 
+    float binFreq = (float)audioProcessor.getSampleRate() / (float)currentFftSize;
+
     for (int i = 1; i < currentFftSize / 2; ++i)
     {
-        float freq = (float)i * ((float)audioProcessor.getSampleRate() / (float)currentFftSize);
+        float freq = binFreq * (float)i;
         if (freq < minFreq) continue;
         if (freq > maxFreq) break;
 
@@ -534,7 +487,7 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
         float xPos = width * std::pow(normFreq, skewFactor);
         int xPixel = juce::jlimit(0, juce::roundToInt(width), juce::roundToInt(xPos));
         
-        float tilt = 4.5f * std::log2(freq / 1000.0f); // 4.5dB/oct matches SPAN default
+        float tilt = isTiltEnabled ? 4.5f * std::log2(freq / 1000.0f) : 0.0f;
 
         float rawDb = juce::Decibels::gainToDecibels(scopeData[i], -100.0f);
         float dbLevel = rawDb > -99.9f ? rawDb + tilt : -100.0f;
@@ -693,8 +646,74 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
         g.fillRect(textX, textY, textWidth, 22);
 
         g.setColour(juce::Colours::white);
+        g.setFont(12.0f);
         g.drawText(text, textX, textY, textWidth, 22, juce::Justification::centred, false);
     }
+
+    // 6. Draw LUFS Meters
+    // (Removed background fill to leave it transparent)
+    
+    // Draw "LUFS" title above the meters
+    g.setColour(juce::Colours::white);
+    g.setFont(juce::Font(14.0f, juce::Font::bold));
+    g.drawText("LUFS", meterArea.getX(), meterArea.getY() - 10, meterArea.getWidth(), 20, juce::Justification::centred, false);
+
+    float intLufs = audioProcessor.getIntegratedLufs();
+    float stLufs = audioProcessor.getShortTermLufs();
+    
+    // Meter drawing helper
+    auto drawMeter = [&](juce::Rectangle<int> area, float lufsValue, juce::String label, bool isIntegrated) {
+        // Draw background
+        g.setColour(juce::Colours::black.withAlpha(0.3f));
+        g.fillRect(area);
+        
+        // Calculate filled height (scale: minDecibels to maxDecibels)
+        float mappedLufs = juce::jlimit(minDecibels, maxDecibels, lufsValue);
+        float fillRatio = (mappedLufs - minDecibels) / (maxDecibels - minDecibels);
+        int fillHeight = juce::roundToInt(fillRatio * area.getHeight());
+        
+        juce::Rectangle<int> fillRect = area.withTrimmedTop(area.getHeight() - fillHeight);
+        
+        // Use a neutral/transparent color similar to the frequency bands
+        g.setColour(juce::Colour::fromString("ffffffff").withAlpha(0.12f));
+        g.fillRect(fillRect);
+        
+        // Draw target line for Integrated LUFS
+        if (isIntegrated && currentPresetIndex >= 0 && currentPresetIndex < presets.size()) {
+            float targetLufs = presets[currentPresetIndex].targetLufs;
+            float mappedTarget = juce::jlimit(minDecibels, maxDecibels, targetLufs);
+            float targetRatio = (mappedTarget - minDecibels) / (maxDecibels - minDecibels);
+            int targetY = area.getBottom() - juce::roundToInt(targetRatio * area.getHeight());
+            
+            g.setColour(juce::Colours::white.withAlpha(0.8f));
+            g.drawHorizontalLine(targetY, (float)area.getX(), (float)area.getRight());
+        }
+
+        // Draw outline
+        g.setColour(juce::Colours::white.withAlpha(0.2f));
+        g.drawRect(area);
+
+        // Draw label (I or ST)
+        g.setColour(juce::Colours::white);
+        g.setFont(12.0f);
+        g.drawText(label, area.getX(), area.getY() - 15, area.getWidth(), 15, juce::Justification::centred, false);
+
+        // Draw value
+        juce::String valStr = lufsValue > -99.0f ? juce::String(lufsValue, 1) : "--";
+        g.drawText(valStr, area.getX() - 5, area.getBottom() + 2, area.getWidth() + 10, 15, juce::Justification::centred, false);
+    };
+
+    int meterWidth = 30;
+    int spacing = 15;
+    int totalMetersWidth = meterWidth * 2 + spacing;
+    int startX = meterArea.getX() + (meterArea.getWidth() - totalMetersWidth) / 2;
+    
+    // Shift meters down slightly to make room for the "LUFS" label
+    juce::Rectangle<int> intMeterArea(startX, meterArea.getY() + 25, meterWidth, meterArea.getHeight() - 45);
+    juce::Rectangle<int> stMeterArea(intMeterArea.getRight() + spacing, meterArea.getY() + 25, meterWidth, meterArea.getHeight() - 45);
+    
+    drawMeter(intMeterArea, intLufs, "I", true);
+    drawMeter(stMeterArea, stLufs, "ST", false);
 }
 
 void MondoEqRefAudioProcessorEditor::resized()
@@ -706,9 +725,12 @@ void MondoEqRefAudioProcessorEditor::resized()
     targetRoleBox.setBounds(targetRoleLabel.getRight() + 5, 5, 200, 20);
 
     resetButton.setBounds(targetRoleBox.getRight() + 20, 5, 100, 20);
+    tiltButton.setBounds(resetButton.getRight() + 20, 5, 120, 20);
     
-    lufsResetButton.setBounds(resetButton.getRight() + 20, 5, 100, 20);
-    lufsLabel.setBounds(lufsResetButton.getRight() + 10, 5, 120, 20);
+    // Position targetOffsetSlider vertically on the left
+    auto fullArea = getLocalBounds();
+    auto leftArea = fullArea.removeFromLeft(40).withTrimmedTop(40).withTrimmedBottom(20);
+    targetOffsetSlider.setBounds(leftArea);
 }
 
 void MondoEqRefAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
@@ -729,7 +751,7 @@ void MondoEqRefAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& even
 
 void MondoEqRefAudioProcessorEditor::mouseDown(const juce::MouseEvent& event)
 {
-    auto plotArea = getLocalBounds().withTrimmedTop(40).withTrimmedRight(40).withTrimmedBottom(20);
+    auto plotArea = getLocalBounds().withTrimmedLeft(40).withTrimmedRight(100).withTrimmedTop(40).withTrimmedRight(40).withTrimmedBottom(20);
     if (!plotArea.contains(event.getPosition())) return;
 
     dragStartY = (float)event.getMouseDownY();
@@ -740,7 +762,7 @@ void MondoEqRefAudioProcessorEditor::mouseDown(const juce::MouseEvent& event)
 
 void MondoEqRefAudioProcessorEditor::mouseDrag(const juce::MouseEvent& event)
 {
-    auto plotArea = getLocalBounds().withTrimmedTop(40).withTrimmedRight(40).withTrimmedBottom(20);
+    auto plotArea = getLocalBounds().withTrimmedLeft(40).withTrimmedRight(100).withTrimmedTop(40).withTrimmedRight(40).withTrimmedBottom(20);
 
     isDragging = true;
     
@@ -767,7 +789,7 @@ void MondoEqRefAudioProcessorEditor::mouseDrag(const juce::MouseEvent& event)
 
 void MondoEqRefAudioProcessorEditor::mouseUp(const juce::MouseEvent& event)
 {
-    auto plotArea = getLocalBounds().withTrimmedTop(40).withTrimmedRight(40).withTrimmedBottom(20);
+    auto plotArea = getLocalBounds().withTrimmedLeft(40).withTrimmedRight(100).withTrimmedTop(40).withTrimmedRight(40).withTrimmedBottom(20);
     
     // If it was just a simple click (not dragged), handle measurement logic
     if (!isDragging && plotArea.contains(event.getPosition()))
@@ -788,7 +810,7 @@ void MondoEqRefAudioProcessorEditor::mouseUp(const juce::MouseEvent& event)
 
 void MondoEqRefAudioProcessorEditor::mouseMove(const juce::MouseEvent& event)
 {
-    auto plotArea = getLocalBounds().withTrimmedTop(40).withTrimmedRight(40).withTrimmedBottom(20);
+    auto plotArea = getLocalBounds().withTrimmedLeft(40).withTrimmedRight(100).withTrimmedTop(40).withTrimmedRight(40).withTrimmedBottom(20);
 
     if (plotArea.contains(event.getPosition())) {
         isMouseOverPlot = true;
@@ -807,4 +829,29 @@ void MondoEqRefAudioProcessorEditor::mouseExit(const juce::MouseEvent& event)
         isMouseOverPlot = false;
         repaint();
     }
+}
+
+bool MondoEqRefAudioProcessorEditor::keyPressed(const juce::KeyPress& key)
+{
+    if (key.getKeyCode() == 'R' || key.getKeyCode() == 'r')
+    {
+        resetButton.triggerClick();
+        return true;
+    }
+    return juce::AudioProcessorEditor::keyPressed(key);
+}
+
+juce::String MondoEqRefAudioProcessorEditor::getTooltip()
+{
+    // Note: getTooltip doesn't have the mouse event, but juce::Desktop can provide the mouse position,
+    // or we can use a stored mouse position. However, getTooltip is queried periodically.
+    // TooltipClient provides getTooltip() but usually TooltipWindow handles checking which Component is under mouse.
+    // If the whole Editor is the TooltipClient, we check the relative mouse pos.
+    auto pos = getMouseXYRelative();
+    for (const auto& tooltip : activeBandTooltips) {
+        if (tooltip.rect.contains(pos.toFloat())) {
+            return tooltip.text;
+        }
+    }
+    return "";
 }

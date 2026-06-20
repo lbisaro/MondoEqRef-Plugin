@@ -3,7 +3,7 @@
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 
-class MondoEqRefAudioProcessorEditor : public juce::AudioProcessorEditor, private juce::Timer
+class MondoEqRefAudioProcessorEditor : public juce::AudioProcessorEditor, private juce::Timer, public juce::TooltipClient
 {
 public:
     MondoEqRefAudioProcessorEditor (MondoEqRefAudioProcessor&);
@@ -19,8 +19,13 @@ public:
     void mouseUp(const juce::MouseEvent& event) override;
     void mouseMove(const juce::MouseEvent& event) override;
     void mouseExit(const juce::MouseEvent& event) override;
+    
+    bool keyPressed(const juce::KeyPress& key) override;
+    juce::String getTooltip() override;
 
 private:
+    juce::SharedResourcePointer<juce::TooltipWindow> tooltipWindow;
+    
     void timerCallback() override;
     void updateFftSize();
     void pushNextSampleIntoFifo(float sample) noexcept;
@@ -30,8 +35,8 @@ private:
     void targetRoleChanged();
 
     struct PresetPoint { float f; float target; float maxLimit; float minLimit; };
-    struct PresetBand { float minFreq; float maxFreq; int targetMin; int targetMax; juce::String name; juce::Colour color; };
-    struct PresetTarget { juce::String name; std::vector<PresetBand> bands; std::vector<PresetPoint> points; };
+    struct PresetBand { float minFreq; float maxFreq; juce::String name; juce::String tip; juce::Colour color; };
+    struct PresetTarget { juce::String name; float targetLufs = -18.0f; std::vector<PresetBand> bands; std::vector<PresetPoint> points; };
     
     std::vector<PresetTarget> presets;
     int currentPresetIndex = 0;
@@ -45,9 +50,11 @@ private:
     juce::Label targetRoleLabel;
 
     juce::TextButton resetButton;
+    juce::ToggleButton tiltButton { "Tilt +4.5dB/Oct" };
+    juce::Slider targetOffsetSlider { juce::Slider::LinearVertical, juce::Slider::TextBoxBelow };
     
-    juce::Label lufsLabel;
-    juce::TextButton lufsResetButton;
+    bool isTiltEnabled = true;
+    float currentTargetOffset = 0.0f;
 
     int currentFftOrder = 11; // 2^11 = 2048
     int currentFftSize = 2048;
@@ -60,6 +67,9 @@ private:
     bool nextFFTBlockReady = false;
     std::vector<float> scopeData;
     std::vector<float> representativeCurve; // Peak Hold
+
+    struct ActiveTooltip { juce::Rectangle<float> rect; juce::String text; };
+    std::vector<ActiveTooltip> activeBandTooltips;
 
     // View state for Vertical Zoom
     float minDecibels = -100.0f;

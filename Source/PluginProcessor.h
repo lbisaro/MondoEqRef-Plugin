@@ -48,15 +48,35 @@ public:
     std::atomic<double> lufsSumSquares { 0.0 };
     std::atomic<int64_t> lufsSampleCount { 0 };
 
+    struct LufsBlock { double sumSquares = 0.0; int samples = 0; };
+    std::array<LufsBlock, 30> shortTermBlocks;
+    int shortTermBlockIndex = 0;
+    std::atomic<double> shortTermSumSquares { 0.0 };
+    std::atomic<int64_t> shortTermSampleCount { 0 };
+
     void resetLufs() {
         lufsSumSquares = 0.0;
         lufsSampleCount = 0;
+        for (auto& b : shortTermBlocks) {
+            b.sumSquares = 0.0;
+            b.samples = 0;
+        }
+        shortTermSumSquares = 0.0;
+        shortTermSampleCount = 0;
     }
     
     float getIntegratedLufs() const {
         int64_t count = lufsSampleCount.load();
         if (count == 0) return -100.0f;
         double meanSquare = lufsSumSquares.load() / (double)count;
+        if (meanSquare <= 1e-10) return -100.0f;
+        return (float)(10.0 * std::log10(meanSquare) - 0.691);
+    }
+
+    float getShortTermLufs() const {
+        int64_t count = shortTermSampleCount.load();
+        if (count == 0) return -100.0f;
+        double meanSquare = shortTermSumSquares.load() / (double)count;
         if (meanSquare <= 1e-10) return -100.0f;
         return (float)(10.0 * std::log10(meanSquare) - 0.691);
     }
