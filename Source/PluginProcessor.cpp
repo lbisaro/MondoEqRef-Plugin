@@ -123,6 +123,13 @@ void MondoEqRefAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
 {
     juce::ScopedNoDenormals noDenormals;
     auto totalNumInputChannels  = getTotalNumInputChannels();
+    
+    // Solo logear si estamos analizando algo mal
+    static int logChannelsCtr = 0;
+    if (logChannelsCtr++ % 200 == 0) {
+        juce::Logger::writeToLog("processBlock - input channels: " + juce::String(totalNumInputChannels) + " buffer channels: " + juce::String(buffer.getNumChannels()));
+    }
+
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)

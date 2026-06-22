@@ -67,7 +67,14 @@ void MondoEqRefAudioProcessorEditor::loadTargets()
     presets.clear();
     targetRoleBox.clear();
     
-    juce::File dataFile("C:/Users/lbisa/OneDrive/Documentos/soft/Guitarra/Plugins/MondoEqRef/Data/targets.json");
+    juce::File dataFile;
+#if JUCE_WINDOWS
+    dataFile = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+        .getParentDirectory().getChildFile("Local").getChildFile("MondoEqRef").getChildFile("targets.json");
+#else
+    dataFile = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+        .getChildFile("MondoEqRef").getChildFile("targets.json");
+#endif
 
     targetRoleBox.addItem("None", 1);
 
@@ -223,9 +230,12 @@ void MondoEqRefAudioProcessorEditor::drawNextFrameOfSpectrum()
     window->multiplyWithWindowingTable (fftData.data(), (size_t) currentFftSize);
     forwardFFT->performFrequencyOnlyForwardTransform (fftData.data());
 
+    float maxMag = 0.0f;
     for (int i = 0; i < currentFftSize / 2; ++i)
     {
         float magnitude = (fftData[i] * 4.0f) / (float)currentFftSize;
+        
+        if (magnitude > maxMag) maxMag = magnitude;
         
         // Smoothing in magnitude domain
         scopeData[i] = scopeData[i] * 0.8f + magnitude * 0.2f;
@@ -233,6 +243,10 @@ void MondoEqRefAudioProcessorEditor::drawNextFrameOfSpectrum()
         if (scopeData[i] > representativeCurve[i])
             representativeCurve[i] = scopeData[i];
     }
+    
+    // Almacenamos el maxMag en una variable de la clase o lo imprimimos de otra forma
+    // para que la GUI lo muestre. Para no tocar .h, vamos a confiar en que llegue al log si lo forzamos.
+    juce::Logger::writeToLog("FFT Drawn! MaxMag: " + juce::String(maxMag));
 }
 
 void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
