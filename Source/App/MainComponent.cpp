@@ -21,9 +21,16 @@ MainComponent::MainComponent()
     navStemsButton.setRadioGroupId(1);
 
     auto showView = [this](int viewIndex) {
+        if (viewIndex != 0 && analyzeView.getIsPlaying()) {
+            analyzeView.setIsPlaying(false); // Forzar stop si salimos de la pestaña
+        }
+        
         analyzeView.setVisible(viewIndex == 0);
         guitarDIView.setVisible(viewIndex == 1);
         stemsView.setVisible(viewIndex == 2);
+        
+        if (viewIndex == 0) analyzeView.grabKeyboardFocus();
+        else if (viewIndex == 1) guitarDIView.grabKeyboardFocus();
         
         // Update nav button toggles to match
         if (viewIndex == 0) navAnalyzeButton.setToggleState(true, juce::dontSendNotification);
@@ -70,8 +77,8 @@ MainComponent::MainComponent()
     };
     
     guitarDIView.onRecordToggled = [this](bool startRecord, const juce::String& fileName) {
-        if (startRecord) startRecordingDI(fileName);
-        else             stopRecordingDI();
+        if (startRecord) startRecordingDI();
+        else             stopRecordingDI(fileName);
     };
     
     guitarDIView.getDiRms = [this]() {
@@ -136,7 +143,7 @@ MainComponent::MainComponent()
 MainComponent::~MainComponent()
 {
     stopTimer();
-    stopRecordingDI();
+    stopRecordingDI("");
 
     deviceManager.removeAudioCallback(&audioSourcePlayer);
     audioSourcePlayer.setSource(nullptr);
@@ -216,6 +223,11 @@ void MainComponent::timerCallback()
         analyzeView.debugLabel.setText("Device ERROR: device == nullptr", juce::dontSendNotification);
         guitarDIView.debugLabel.setText("Device ERROR: device == nullptr", juce::dontSendNotification);
     }
+    else if (analyzeView.debugLabel.getText().startsWith("Device ERROR"))
+    {
+        analyzeView.debugLabel.setText("", juce::dontSendNotification);
+        guitarDIView.debugLabel.setText("", juce::dontSendNotification);
+    }
 }
 
 void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate)
@@ -266,7 +278,7 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
     int denseProcessedCh = -1;
     auto activeIns = device->getActiveInputChannels();
     
-    if (activeIns[physicalProcessedCh])
+    if (physicalProcessedCh >= 0 && activeIns[physicalProcessedCh])
     {
         denseProcessedCh = 0;
         for (int i = 0; i < physicalProcessedCh; ++i)
@@ -277,7 +289,7 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
     int denseOutCh = -1;
     auto activeOuts = device->getActiveOutputChannels();
     
-    if (activeOuts[physicalOutCh])
+    if (physicalOutCh >= 0 && activeOuts[physicalOutCh])
     {
         denseOutCh = 0;
         for (int i = 0; i < physicalOutCh; ++i)
@@ -286,11 +298,34 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
 
     int physicalDiCh = routingManager.lastUsedProfile.diInputChannel;
     int denseDiCh = -1;
-    if (activeIns[physicalDiCh])
+    if (physicalDiCh >= 0 && activeIns[physicalDiCh])
     {
         denseDiCh = 0;
         for (int i = 0; i < physicalDiCh; ++i)
             if (activeIns[i]) denseDiCh++;
+    }
+
+    // --- ALWAYS PROCESS DI METERS AND RECORDING ---
+    if (denseDiCh >= 0 && denseDiCh < bufferToFill.buffer->getNumChannels())
+    {
+        // Measure RMS for VU meter
+        currentDiRms = bufferToFill.buffer->getRMSLevel(denseDiCh, bufferToFill.startSample, bufferToFill.numSamples);
+
+        if (isRecordingDI.load())
+        {
+            const float* inputData = bufferToFill.buffer->getReadPointer(denseDiCh, bufferToFill.startSample);
+            int samplesToWrite = juce::jmin(bufferToFill.numSamples, (int)(diRecordBuffer.getNumSamples() - diRecordSampleCount.load()));
+            
+            if (samplesToWrite > 0)
+            {
+                diRecordBuffer.copyFrom(0, diRecordSampleCount.load(), inputData, samplesToWrite);
+                diRecordSampleCount.store(diRecordSampleCount.load() + samplesToWrite);
+            }
+        }
+    }
+    else
+    {
+        currentDiRms = 0.0f;
     }
 
     // --- ALWAYS PROCESS DI METERS AND RECORDING, EVEN IF NOT PLAYING ---    // -------------------------------------------------------------------
@@ -307,22 +342,6 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
 
     if (shouldLog)
     {
-        float lufsVal = processor.getIntegratedLufs();
-
-        juce::String text = "Modo: " + juce::String(trackMode)
-            + " | Proc[P:" + juce::String(physicalProcessedCh) + " D:" + juce::String(denseProcessedCh) + "]"
-            + " | DI[P:" + juce::String(physicalDiCh) + " D:" + juce::String(denseDiCh) + "]"
-            + " | Bufs: " + juce::String(bufferToFill.buffer->getNumChannels())
-            + " | SR: " + juce::String(currentSampleRate);
-            
-        juce::MessageManager::callAsync([this, text]() {
-            analyzeView.debugLabel.setText(text, juce::dontSendNotification);
-            guitarDIView.debugLabel.setText(text, juce::dontSendNotification);
-        });
-    }
-
-    if (shouldLog)
-    {
         DBG("trackMode: " << trackMode << " denseProcessedCh: " << denseProcessedCh << " denseDiCh: " << denseDiCh 
             << " bufferToFillChs: " << bufferToFill.buffer->getNumChannels() 
             << " isRecordingDI: " << (isRecordingDI.load() ? "true" : "false"));
@@ -336,26 +355,59 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
             eqInput.copyFrom(1, 0, *bufferToFill.buffer, denseProcessedCh, bufferToFill.startSample, bufferToFill.numSamples);
         }
         
-        if (shouldLog)
-            DBG("LiveMode - eqInput RMS: " << eqInput.getRMSLevel(0, 0, eqInput.getNumSamples()));
-            
+        bufferToFill.clearActiveBufferRegion(); // Clear physical input from outputs
         processor.processBlock(eqInput, midi);
-        return; // Mute outputs
+        return; // Live audio does not output to avoid feedback, unless we want to monitor? (Assuming mute)
     }
-    else if (trackMode == 2) // Guitar DI
+    else if (trackMode == 2) // Guitar DI Reamping
     {
+        bufferToFill.clearActiveBufferRegion();
         juce::ScopedLock sl(audioLock);
+        
+        juce::AudioBuffer<float> dryDiBuffer(1, bufferToFill.numSamples);
+        dryDiBuffer.clear();
+        
         if (diTransportSource != nullptr)
         {
-            juce::AudioSourceChannelInfo diInfo(&eqInput, 0, eqInput.getNumSamples());
+            juce::AudioSourceChannelInfo diInfo(&dryDiBuffer, 0, dryDiBuffer.getNumSamples());
             diTransportSource->getNextAudioBlock(diInfo);
         }
+        
+        // Output dry DI to the selected Output Channel (for Reamping)
+        if (denseOutCh >= 0 && denseOutCh < bufferToFill.buffer->getNumChannels())
+        {
+            bufferToFill.buffer->addFrom(denseOutCh, bufferToFill.startSample, dryDiBuffer, 0, 0, dryDiBuffer.getNumSamples());
+            // Optionally output to right channel too if user selects a stereo pair for reamping
+            if (denseOutCh + 1 < bufferToFill.buffer->getNumChannels())
+                bufferToFill.buffer->addFrom(denseOutCh + 1, bufferToFill.startSample, dryDiBuffer, 0, 0, dryDiBuffer.getNumSamples());
+        }
 
+        // Now, we must READ the processed return from the Helix to analyze it!
+        // The return comes from the Processed Input Channel
+        if (denseProcessedCh >= 0 && denseProcessedCh < bufferToFill.buffer->getNumChannels())
+        {
+            eqInput.copyFrom(0, 0, *bufferToFill.buffer, denseProcessedCh, bufferToFill.startSample, bufferToFill.numSamples);
+            eqInput.copyFrom(1, 0, *bufferToFill.buffer, denseProcessedCh, bufferToFill.startSample, bufferToFill.numSamples);
+        }
+        
+        // Clear the physical inputs from the final output buffer so we do not create a feedback loop
+        bufferToFill.clearActiveBufferRegion(); 
+        
+        // Re-apply the dry DI output that we just cleared!
+        if (denseOutCh >= 0 && denseOutCh < bufferToFill.buffer->getNumChannels())
+        {
+            bufferToFill.buffer->addFrom(denseOutCh, bufferToFill.startSample, dryDiBuffer, 0, 0, dryDiBuffer.getNumSamples());
+            if (denseOutCh + 1 < bufferToFill.buffer->getNumChannels())
+                bufferToFill.buffer->addFrom(denseOutCh + 1, bufferToFill.startSample, dryDiBuffer, 0, 0, dryDiBuffer.getNumSamples());
+        }
+
+        // Analyze the RE-AMPED signal
         processor.processBlock(eqInput, midi);
         return; 
     }
     else if (trackMode == 3) // Stems
     {
+        bufferToFill.clearActiveBufferRegion();
         juce::ScopedLock sl(audioLock);
         if (stemTransportSource != nullptr)
         {
@@ -363,22 +415,14 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
             stemTransportSource->getNextAudioBlock(stemInfo);
         }
 
-        if (shouldLog)
-            DBG("StemsMode - eqInput RMS: " << eqInput.getRMSLevel(0, 0, eqInput.getNumSamples()) 
-                << " playing: " << ((stemTransportSource && stemTransportSource->isPlaying()) ? "true" : "false")
-                << " denseOutCh: " << denseOutCh);
-
         processor.processBlock(eqInput, midi);
 
-        // Mix down stem to physical output so user can hear it
         if (denseOutCh >= 0 && denseOutCh < bufferToFill.buffer->getNumChannels())
         {
             bufferToFill.buffer->addFrom(denseOutCh, bufferToFill.startSample, eqInput, 0, 0, eqInput.getNumSamples());
-            // If output is stereo, we probably want it on next channel too, but let's stick to standard denseOutCh
             if (denseOutCh + 1 < bufferToFill.buffer->getNumChannels())
                 bufferToFill.buffer->addFrom(denseOutCh + 1, bufferToFill.startSample, eqInput, 1, 0, eqInput.getNumSamples());
         }
-        
         return;
     }
 
@@ -415,8 +459,12 @@ void MainComponent::loadStemFile(const juce::File& file)
         
         {
             juce::ScopedLock sl(audioLock);
-            stemReaderSource.reset(newSource.release());
+            if (stemTransportSource != nullptr)
+            {
+                stemTransportSource->setSource(nullptr);
+            }
             stemTransportSource = std::move(newTransport);
+            stemReaderSource.reset(newSource.release());
         }
 
         analyzeView.setIsPlaying(false);
@@ -479,8 +527,12 @@ void MainComponent::loadDiFile(const juce::File& file)
         
         {
             juce::ScopedLock sl(audioLock);
-            diReaderSource.reset(newSource.release());
+            if (diTransportSource != nullptr)
+            {
+                diTransportSource->setSource(nullptr);
+            }
             diTransportSource = std::move(newTransport);
+            diReaderSource.reset(newSource.release());
         }
 
         analyzeView.setIsPlaying(false);
@@ -490,23 +542,22 @@ void MainComponent::loadDiFile(const juce::File& file)
     }
 }
 
-void MainComponent::startRecordingDI(const juce::String& fileName)
+void MainComponent::startRecordingDI()
 {
-    stopRecordingDI(); // Stop any existing recording
+    stopRecordingDI(""); // Stop any existing recording without saving
     
-    currentRecordingFileName = fileName;
     diRecordSampleCount.store(0);
     isRecordingDI.store(true);
 }
 
-void MainComponent::stopRecordingDI()
+void MainComponent::stopRecordingDI(const juce::String& fileName)
 {
     if (isRecordingDI.load())
     {
         isRecordingDI.store(false);
         
         int totalSamples = diRecordSampleCount.load();
-        if (totalSamples > 0)
+        if (totalSamples > 0 && fileName.isNotEmpty())
         {
             // Apply 30ms fade-in and fade-out
             int fadeSamples = (int)(currentSampleRate * 0.03);
@@ -523,7 +574,7 @@ void MainComponent::stopRecordingDI()
                 data[totalSamples - 1 - i] *= (float)i / (float)fadeSamples;
                 
             juce::File diDir = DeviceRoutingManager::getDiDirectory();
-            juce::File outFile = diDir.getChildFile(currentRecordingFileName);
+            juce::File outFile = diDir.getChildFile(fileName);
             outFile.deleteFile();
             
             juce::WavAudioFormat wavFormat;

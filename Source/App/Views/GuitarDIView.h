@@ -36,6 +36,7 @@ private:
 
     juce::TextButton loadButton { "Importar DI" };
     juce::TextButton recordButton { "Grabar Nuevo DI" };
+    juce::TextButton cancelButton { "Cancelar" };
     juce::Label statusLabel;
 
 public:

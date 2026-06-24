@@ -55,6 +55,16 @@ GuitarDIView::GuitarDIView()
     recordButton.setColour(juce::TextButton::buttonColourId, juce::Colours::red.withAlpha(0.6f));
     recordButton.onClick = [this] { promptForRecording(); };
 
+    addAndMakeVisible(cancelButton);
+    cancelButton.setColour(juce::TextButton::buttonColourId, juce::Colours::grey);
+    cancelButton.setVisible(false);
+    cancelButton.onClick = [this] {
+        countdownTicks = 0;
+        setRecordingState(false);
+        if (onRecordToggled) onRecordToggled(false, "");
+        refreshList();
+    };
+
     addAndMakeVisible(statusLabel);
     statusLabel.setText("Libreria de Guitar DIs", juce::dontSendNotification);
     statusLabel.setFont(juce::FontOptions(24.0f, juce::Font::bold));
@@ -82,21 +92,44 @@ void GuitarDIView::paint(juce::Graphics& g)
     g.fillAll(getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId));
     
     auto bounds = getLocalBounds().reduced(20);
-    auto topArea = bounds.removeFromTop(40);
-    bounds.removeFromTop(10);
-    auto meterArea = bounds.removeFromTop(20);
     
-    // Draw VU Meter
-    g.setColour(juce::Colours::darkgrey.darker());
-    g.fillRoundedRectangle(meterArea.toFloat(), 4.0f);
+    // Meter on the right side
+    auto meterArea = bounds.removeFromRight(40);
+    bounds.removeFromRight(20); // Spacing
+    
+    // Draw "DI" label above meter
+    g.setColour(juce::Colours::white);
+    g.setFont(14.0f);
+    g.drawText("DI", meterArea.removeFromTop(20), juce::Justification::centred, false);
+    meterArea.removeFromTop(5);
+    
+    // Draw VU Meter background
+    g.setColour(juce::Colours::black.withAlpha(0.3f));
+    g.fillRect(meterArea);
     
     float db = juce::Decibels::gainToDecibels(currentRms, -80.0f);
-    float widthRatio = juce::jlimit(0.0f, 1.0f, (db + 80.0f) / 80.0f); // Map -80dB to 0dB
+    auto vuArea = meterArea;
+    float vuDb = db;
+    if (vuDb > -79.0f)
+    {
+        float fillHeight = juce::jmap(vuDb, -60.0f, 0.0f, 0.0f, (float)vuArea.getHeight());
+        fillHeight = juce::jlimit(0.0f, (float)vuArea.getHeight(), fillHeight);
+        
+        auto fillArea = vuArea.withTrimmedTop(vuArea.getHeight() - (int)fillHeight);
+        
+        // Color igual a LUFS fill
+        g.setColour(juce::Colour::fromString("ffffffff").withAlpha(0.12f));
+        g.fillRect(fillArea);
+    }
+
+    // Draw outline
+    g.setColour(juce::Colours::white.withAlpha(0.2f));
+    g.drawRect(meterArea);
     
-    auto fillArea = meterArea.toFloat().reduced(2.0f);
-    fillArea.setWidth(fillArea.getWidth() * widthRatio);
-    g.setColour(juce::Colours::cyan.withAlpha(0.7f));
-    g.fillRoundedRectangle(fillArea, 3.0f);
+    // Draw current dB text below meter
+    juce::String valStr = db > -79.0f ? juce::String(db, 1) : "--";
+    g.setColour(juce::Colours::white);
+    g.drawText(valStr, meterArea.getX(), meterArea.getBottom() + 5, meterArea.getWidth(), 20, juce::Justification::centred, false);
     
     if (countdownTicks > 0)
     {
@@ -132,16 +165,16 @@ void GuitarDIView::resized()
     debugLabel.setBounds(10, bounds.getBottom() - 30, bounds.getWidth() - 20, 20);
 
     bounds = getLocalBounds().reduced(20);
+    bounds.removeFromRight(60); // Reserve space for the meter
     
     auto topArea = bounds.removeFromTop(40);
     statusLabel.setBounds(topArea.removeFromLeft(300));
     
-    auto buttonArea = topArea.removeFromRight(300);
-    loadButton.setBounds(buttonArea.removeFromLeft(140).reduced(5));
-    recordButton.setBounds(buttonArea.removeFromRight(140).reduced(5));
+    auto buttonArea = topArea.removeFromRight(400); // wider
+    loadButton.setBounds(buttonArea.removeFromLeft(120).reduced(5));
+    recordButton.setBounds(buttonArea.removeFromLeft(140).reduced(5));
+    cancelButton.setBounds(buttonArea.removeFromLeft(120).reduced(5));
 
-    bounds.removeFromTop(10);
-    bounds.removeFromTop(20); // meterArea
     bounds.removeFromTop(10);
     viewport.setBounds(bounds);
     
@@ -261,35 +294,41 @@ void GuitarDIView::promptForRecording()
 {
     if (isRecording)
     {
-        setRecordingState(false);
-        if (onRecordToggled)
-            onRecordToggled(false, "");
-            
-        // Start closing status
-        isClosingRecording = true;
-        countdownTicks = 30; // 1 second
-        return;
+        // STOP -> Ask for filename
+        juce::AlertWindow* w = new juce::AlertWindow("Guardar DI", "Escribe un nombre para este archivo DI:", juce::MessageBoxIconType::QuestionIcon);
+        w->addTextEditor("name", "DI_Nuevo", "Nombre");
+        w->addButton("Guardar", 1, juce::KeyPress(juce::KeyPress::returnKey));
+        w->addButton("Descartar", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+
+        w->enterModalState(true, juce::ModalCallbackFunction::create([this, w](int result) {
+            if (result == 1)
+            {
+                juce::String fileName = w->getTextEditorContents("name");
+                if (!fileName.endsWithIgnoreCase(".wav"))
+                    fileName += ".wav";
+                    
+                setRecordingState(false);
+                if (onRecordToggled) onRecordToggled(false, fileName);
+            }
+            else
+            {
+                setRecordingState(false);
+                if (onRecordToggled) onRecordToggled(false, "");
+            }
+            refreshList();
+        }), true);
     }
-
-    if (countdownTicks > 0) return; // Already preparing
-
-    juce::AlertWindow* w = new juce::AlertWindow("Nombre del Nuevo DI", "Escribe un nombre para este archivo DI:", juce::MessageBoxIconType::QuestionIcon);
-    w->addTextEditor("name", "DI_Nuevo", "Nombre");
-    w->addButton("Grabar", 1, juce::KeyPress(juce::KeyPress::returnKey));
-    w->addButton("Cancelar", 0, juce::KeyPress(juce::KeyPress::escapeKey));
-
-    w->enterModalState(true, juce::ModalCallbackFunction::create([this, w](int result) {
-        if (result == 1)
-        {
-            pendingFileName = w->getTextEditorContents("name");
-            if (!pendingFileName.endsWithIgnoreCase(".wav"))
-                pendingFileName += ".wav";
-                
-            countdownTicks = 5 * 30;
-            recordingSeconds = 0;
-            isClosingRecording = false;
-        }
-    }), true);
+    else
+    {
+        if (countdownTicks > 0) return; // Already preparing
+        
+        // START directly
+        countdownTicks = 3 * 30; // 3 seconds countdown
+        recordingSeconds = 0;
+        isClosingRecording = false;
+        
+        cancelButton.setVisible(true);
+    }
 }
 
 void GuitarDIView::timerCallback()
@@ -348,11 +387,13 @@ void GuitarDIView::setRecordingState(bool recording)
     {
         recordButton.setButtonText("Detener Grabacion");
         recordButton.setColour(juce::TextButton::buttonColourId, juce::Colours::darkred);
+        cancelButton.setVisible(true);
     }
     else
     {
         recordButton.setButtonText("Grabar Nuevo DI");
         recordButton.setColour(juce::TextButton::buttonColourId, juce::Colours::red.withAlpha(0.6f));
+        cancelButton.setVisible(false);
     }
     repaint();
 }

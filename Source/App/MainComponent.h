@@ -54,7 +54,6 @@ private:
 
   // DI Recording in RAM
   std::atomic<bool> isRecordingDI { false };
-  juce::String currentRecordingFileName;
   juce::AudioBuffer<float> diRecordBuffer;
   std::atomic<int> diRecordSampleCount { 0 };
   double currentSampleRate = 44100.0;
@@ -64,8 +63,8 @@ private:
 
   float getCurrentDiRms() const { return currentDiRms.load(); }
 
-  void startRecordingDI(const juce::String &fileName);
-  void stopRecordingDI();
+  void startRecordingDI();
+  void stopRecordingDI(const juce::String& fileName);
 
   // UI elements for Top Bar
   juce::TextButton settingsButton{"Audio Settings"};
