@@ -75,11 +75,11 @@ void CustomAudioSettingsComponent::populateCombos() {
   for (int i = 0; i < inputNames.size(); ++i) {
     juce::String suffix = activeInputs[i] ? "" : " (Inactivo)";
     processedCombo.addItem(inputNames[i].replace("Input", "Output", true) + suffix, i + 1);
+    diCombo.addItem(inputNames[i].replace("Input", "Output", true) + suffix, i + 1);
   }
 
   for (int i = 0; i < outputNames.size(); ++i) {
     juce::String suffix = activeOutputs[i] ? "" : " (Inactivo)";
-    diCombo.addItem(outputNames[i].replace("Output", "Input", true) + suffix, i + 1);
     outputCombo.addItem(outputNames[i].replace("Output", "Input", true) + suffix, i + 1);
   }
 

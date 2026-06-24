@@ -14,6 +14,12 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     
+    std::vector<float> getRepresentativeCurve() const { return representativeCurve; }
+    float getCurrentTargetLufs() const;
+    std::function<void(float)> onTargetLufsChanged;
+    void setStemDirectory(const juce::File& dir) { audioProcessor.stemDirectory = dir; }
+    void triggerReset();
+    
     // Mouse Events for Vertical Zoom/Pan
     void mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) override;
     void mouseDrag(const juce::MouseEvent& event) override;
@@ -68,7 +74,14 @@ private:
     int fifoIndex = 0;
     bool nextFFTBlockReady = false;
     std::vector<float> scopeData;
-    std::vector<float> representativeCurve; // Peak Hold
+    std::vector<float> representativeCurve; // Average Curve
+    std::vector<float> sumCurve;
+    int validFrameCount = 0;
+    bool isStemRefActive = false;
+    std::vector<float> stemRefAvgCurve;
+    std::vector<float> stemRefMinCurve;
+    std::vector<float> stemRefMaxCurve;
+    std::unique_ptr<juce::FileChooser> fileChooser;
 
     struct ActiveTooltip { juce::Rectangle<float> rect; juce::String text; };
     std::vector<ActiveTooltip> activeBandTooltips;

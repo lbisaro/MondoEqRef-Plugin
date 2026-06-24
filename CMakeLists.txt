@@ -43,6 +43,7 @@ target_compile_definitions(MondoEqRef
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0
         JUCE_ASIO=1
+        JUCE_USE_MP3AUDIOFORMAT=1
 )
 
 target_link_libraries(MondoEqRef
@@ -68,6 +69,7 @@ target_sources(MondoEqRefApp
         ${SHARED_SOURCES}
         Source/App/Main.cpp
         Source/App/MainComponent.cpp
+        Source/App/AudioNormalizer.cpp
         Source/App/DeviceRouting.cpp
         Source/App/Views/AnalyzeView.cpp
         Source/App/Views/GuitarDIView.cpp
@@ -82,6 +84,7 @@ target_compile_definitions(MondoEqRefApp
         JUCE_STANDALONE_APPLICATION=1
         JucePlugin_Name="MondoEqRef"
         JUCE_ASIO=1
+        JUCE_USE_MP3AUDIOFORMAT=1
 )
 
 target_link_libraries(MondoEqRefApp

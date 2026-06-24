@@ -39,6 +39,8 @@ public:
     static constexpr auto fifoSize = 8192 * 2;
     std::atomic<int> fifoIndex { 0 };
     std::array<float, fifoSize> fifo;
+    
+    juce::File stemDirectory;
 
     void pushNextSampleIntoFifo (float sample);
 

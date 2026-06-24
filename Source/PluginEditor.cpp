@@ -28,6 +28,8 @@ MondoEqRefAudioProcessorEditor::MondoEqRefAudioProcessorEditor (MondoEqRefAudioP
     resetButton.setButtonText("Reset");
     resetButton.onClick = [this] {
         std::fill(representativeCurve.begin(), representativeCurve.end(), 0.0f);
+        std::fill(sumCurve.begin(), sumCurve.end(), 0.0f);
+        validFrameCount = 0;
         audioProcessor.resetLufs();
         repaint();
     };
@@ -77,6 +79,7 @@ void MondoEqRefAudioProcessorEditor::loadTargets()
 #endif
 
     targetRoleBox.addItem("None", 1);
+    targetRoleBox.addItem("Stem Refs", 999);
 
     if (dataFile.existsAsFile())
     {
@@ -159,10 +162,93 @@ void MondoEqRefAudioProcessorEditor::loadTargets()
     currentPresetIndex = -1; // -1 will mean "None"
 }
 
+float MondoEqRefAudioProcessorEditor::getCurrentTargetLufs() const
+{
+    if (currentPresetIndex >= 0 && currentPresetIndex < presets.size()) {
+        return presets[currentPresetIndex].targetLufs;
+    }
+    return -18.0f; // Default if no target
+}
+
+void MondoEqRefAudioProcessorEditor::triggerReset()
+{
+    resetButton.triggerClick();
+}
+
 
 void MondoEqRefAudioProcessorEditor::targetRoleChanged()
 {
-    currentPresetIndex = targetRoleBox.getSelectedId() - 2;
+    int selectedId = targetRoleBox.getSelectedId();
+    if (selectedId == 999) {
+        // Show Multi-selection dialog for Stem Refs using native file chooser (Async)
+        currentPresetIndex = -1;
+        
+        fileChooser = std::make_unique<juce::FileChooser>("Select Stem Refs", audioProcessor.stemDirectory, "*.json");
+        fileChooser->launchAsync(juce::FileBrowserComponent::canSelectMultipleItems | juce::FileBrowserComponent::openMode, 
+            [this](const juce::FileChooser& fc) {
+                auto results = fc.getResults();
+                if (results.isEmpty()) {
+                    isStemRefActive = false;
+                    targetRoleBox.setSelectedId(1, juce::dontSendNotification);
+                    repaint();
+                    return;
+                }
+                
+                std::vector<std::vector<float>> loadedCurves;
+                
+                for (const auto& f : results) {
+                    auto parsed = juce::JSON::parse(f);
+                    if (parsed.isObject()) {
+                        auto curveProp = parsed.getDynamicObject()->getProperty("representativeCurve");
+                        if (curveProp.isArray()) {
+                            std::vector<float> curve;
+                            for (auto& v : *curveProp.getArray()) {
+                                curve.push_back((float)v);
+                            }
+                            if (!curve.empty()) {
+                                loadedCurves.push_back(curve);
+                            }
+                        }
+                    }
+                }
+                
+                if (!loadedCurves.empty()) {
+                    size_t numBins = loadedCurves[0].size();
+                    stemRefAvgCurve.assign(numBins, 0.0f);
+                    stemRefMinCurve.assign(numBins, 1000.0f);
+                    stemRefMaxCurve.assign(numBins, -1000.0f);
+                    
+                    for (size_t i = 0; i < numBins; ++i) {
+                        float sum = 0.0f;
+                        float minVal = 1000.0f;
+                        float maxVal = -1000.0f;
+                        for (const auto& c : loadedCurves) {
+                            float v = c[i];
+                            sum += v;
+                            if (v < minVal) minVal = v;
+                            if (v > maxVal) maxVal = v;
+                        }
+                        stemRefAvgCurve[i] = sum / loadedCurves.size();
+                        stemRefMinCurve[i] = minVal;
+                        stemRefMaxCurve[i] = maxVal;
+                    }
+                    isStemRefActive = true;
+                } else {
+                    isStemRefActive = false;
+                    targetRoleBox.setSelectedId(1, juce::dontSendNotification);
+                }
+                repaint();
+            });
+            
+    } else {
+        isStemRefActive = false;
+        currentPresetIndex = selectedId - 2;
+    }
+    
+    if (onTargetLufsChanged) {
+        onTargetLufsChanged(getCurrentTargetLufs());
+    }
+    
     repaint();
 }
 
@@ -187,6 +273,8 @@ void MondoEqRefAudioProcessorEditor::updateFftSize()
     fftData.assign(currentFftSize * 2, 0.0f);
     scopeData.assign(currentFftSize / 2, 0.0f);
     representativeCurve.assign(currentFftSize / 2, 0.0f);
+    sumCurve.assign(currentFftSize / 2, 0.0f);
+    validFrameCount = 0;
     fifoIndex = 0;
 }
 
@@ -237,11 +325,19 @@ void MondoEqRefAudioProcessorEditor::drawNextFrameOfSpectrum()
         
         if (magnitude > maxMag) maxMag = magnitude;
         
-        // Smoothing in magnitude domain
+        // Smoothing in magnitude domain for display
         scopeData[i] = scopeData[i] * 0.8f + magnitude * 0.2f;
-
-        if (scopeData[i] > representativeCurve[i])
-            representativeCurve[i] = scopeData[i];
+    }
+    
+    // Noise Gate: only include frame in average if signal is detected (> -80dB approx)
+    if (maxMag > 0.0001f)
+    {
+        validFrameCount++;
+        for (int i = 0; i < currentFftSize / 2; ++i)
+        {
+            sumCurve[i] += scopeData[i];
+            representativeCurve[i] = sumCurve[i] / (float)validFrameCount;
+        }
     }
     
     // Almacenamos el maxMag en una variable de la clase o lo imprimimos de otra forma
@@ -336,7 +432,7 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
                 return result;
             };
 
-            std::vector<juce::Point<float>> targetPts, maxPts, minPts;
+            std::vector<juce::Point<float>> targetPts;
             for (const auto& pt : target.points) {
                 if (pt.f < minFreq || pt.f > maxFreq) continue;
                 float normX = (std::log10(pt.f) - minLogFreq) / (maxLogFreq - minLogFreq);
@@ -344,38 +440,15 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
 
                 float tilt = isTiltEnabled ? 4.5f * std::log2(pt.f / 1000.0f) : 0.0f;
                 float tiltedTarget = pt.target + tilt + currentTargetOffset;
-                float tiltedMax = pt.maxLimit + tilt + currentTargetOffset;
-                float tiltedMin = pt.minLimit + tilt + currentTargetOffset;
 
                 float targetY = bottom - juce::jmap(tiltedTarget, minDecibels, maxDecibels, 0.0f, 1.0f) * height;
-                float maxY = bottom - juce::jmap(tiltedMax, minDecibels, maxDecibels, 0.0f, 1.0f) * height;
-                float minY = bottom - juce::jmap(tiltedMin, minDecibels, maxDecibels, 0.0f, 1.0f) * height;
-                
                 targetPts.push_back({x, targetY});
-                maxPts.push_back({x, maxY});
-                minPts.push_back({x, minY});
             }
 
             auto smoothTarget = generateSplinePoints(targetPts);
-            auto smoothMax = generateSplinePoints(maxPts);
-            auto smoothMin = generateSplinePoints(minPts);
 
             if (!smoothTarget.empty()) {
-                // 1. Draw Shaded Area (between max and min)
-                juce::Path shadedPath;
-                shadedPath.startNewSubPath(smoothMax.front());
-                for (size_t i = 1; i < smoothMax.size(); ++i) {
-                    shadedPath.lineTo(smoothMax[i]);
-                }
-                for (int i = (int)smoothMin.size() - 1; i >= 0; --i) {
-                    shadedPath.lineTo(smoothMin[i]);
-                }
-                shadedPath.closeSubPath();
-
-                g.setColour(juce::Colours::lightgreen.withAlpha(0.1f));
-                g.fillPath(shadedPath);
-
-                // 2. Draw Target Line
+                // 1. Draw Target Line
                 juce::Path targetPath;
                 targetPath.startNewSubPath(smoothTarget.front());
                 for (size_t i = 1; i < smoothTarget.size(); ++i) {
@@ -384,16 +457,19 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
                 g.setColour(juce::Colours::lightgreen.withAlpha(0.6f));
                 g.strokePath(targetPath, juce::PathStrokeType(2.0f));
                 
-                // 3. Draw Min/Max Boundary Lines
-                juce::Path maxPath, minPath;
-                maxPath.startNewSubPath(smoothMax.front());
-                minPath.startNewSubPath(smoothMin.front());
-                for (size_t i = 1; i < smoothMax.size(); ++i) maxPath.lineTo(smoothMax[i]);
-                for (size_t i = 1; i < smoothMin.size(); ++i) minPath.lineTo(smoothMin[i]);
+                // 4. Draw Individual Points
+                g.setColour(juce::Colours::white.withAlpha(0.8f));
+                for (const auto& pt : target.points)
+                {
+                    float tiltOffset = isTiltEnabled ? 4.5f * std::log2(pt.f / 1000.0f) : 0.0f;
+                    float tiltedTarget = pt.target + tiltOffset;
                 
-                g.setColour(juce::Colours::lightgreen.withAlpha(0.2f));
-                g.strokePath(maxPath, juce::PathStrokeType(1.0f));
-                g.strokePath(minPath, juce::PathStrokeType(1.0f));
+                    float normFreq = (std::log10(pt.f) - minLogFreq) / (maxLogFreq - minLogFreq);
+                    float px = left + width * std::pow(normFreq, skewFactor);
+                    float py = bottom - juce::jmap(juce::jlimit(minDecibels, maxDecibels, tiltedTarget), minDecibels, maxDecibels, 0.0f, 1.0f) * height;
+                    
+                    g.fillEllipse(px - 3.0f, py - 3.0f, 6.0f, 6.0f);
+                }
             }
         }
 
@@ -447,6 +523,131 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
             g.setFont(12.0f);
             g.drawText(band.name, bandRect.toNearestInt(), juce::Justification::centred, true);
         }
+    }
+    
+    // --- Draw Stem Refs ---
+    if (isStemRefActive && !stemRefAvgCurve.empty()) {
+        std::vector<float> pixelMin(juce::roundToInt(width) + 1, -100.0f);
+        std::vector<float> pixelMax(juce::roundToInt(width) + 1, -100.0f);
+        std::vector<float> pixelAvg(juce::roundToInt(width) + 1, -100.0f);
+        
+        float binFreq = (float)audioProcessor.getSampleRate() / (float)(stemRefAvgCurve.size() * 2);
+
+        for (size_t i = 1; i < stemRefAvgCurve.size(); ++i) {
+            float freq = binFreq * (float)i;
+            if (freq < minFreq) continue;
+            if (freq > maxFreq) break;
+
+            float normFreq = (std::log10(freq) - minLogFreq) / (maxLogFreq - minLogFreq);
+            float xPos = width * std::pow(normFreq, skewFactor);
+            int xPixel = juce::jlimit(0, juce::roundToInt(width), juce::roundToInt(xPos));
+            
+            float tilt = isTiltEnabled ? 4.5f * std::log2(freq / 1000.0f) : 0.0f;
+
+            auto mapDb = [&](float raw) {
+                float db = juce::Decibels::gainToDecibels(raw, -100.0f);
+                return db > -99.9f ? db + tilt : -100.0f;
+            };
+
+            pixelMin[xPixel] = juce::jmax(pixelMin[xPixel], mapDb(stemRefMinCurve[i]));
+            pixelMax[xPixel] = juce::jmax(pixelMax[xPixel], mapDb(stemRefMaxCurve[i]));
+            pixelAvg[xPixel] = juce::jmax(pixelAvg[xPixel], mapDb(stemRefAvgCurve[i]));
+        }
+        
+        auto interpolateGapsRef = [&](std::vector<float>& arr, int w) {
+            int lastValid = -1;
+            for (int x = 0; x <= w; ++x) {
+                if (arr[x] > -99.9f) {
+                    if (lastValid != -1 && x - lastValid > 1) {
+                        float startVal = arr[lastValid];
+                        float endVal = arr[x];
+                        for (int j = lastValid + 1; j < x; ++j) {
+                            float t = (float)(j - lastValid) / (x - lastValid);
+                            arr[j] = startVal + t * (endVal - startVal);
+                        }
+                    }
+                    lastValid = x;
+                }
+            }
+            if (lastValid != -1 && lastValid < w) {
+                for (int j = lastValid + 1; j <= w; ++j) arr[j] = arr[lastValid];
+            }
+            int firstValid = 0;
+            while (firstValid <= w && arr[firstValid] <= -99.9f) firstValid++;
+            if (firstValid <= w && firstValid > 0) {
+                for (int j = 0; j < firstValid; ++j) arr[j] = arr[firstValid];
+            }
+        };
+        
+        interpolateGapsRef(pixelMin, juce::roundToInt(width));
+        interpolateGapsRef(pixelMax, juce::roundToInt(width));
+        interpolateGapsRef(pixelAvg, juce::roundToInt(width));
+        
+        auto smoothArrayRef = [&](std::vector<float>& arr, int w, int radius) {
+            std::vector<float> temp = arr;
+            for (int x = 0; x <= w; ++x) {
+                float sum = 0.0f;
+                int count = 0;
+                for (int k = -radius; k <= radius; ++k) {
+                    int idx = juce::jlimit(0, w, x + k);
+                    sum += temp[idx];
+                    count++;
+                }
+                arr[x] = sum / count;
+            }
+        };
+        
+        smoothArrayRef(pixelMin, juce::roundToInt(width), 40);
+        smoothArrayRef(pixelMax, juce::roundToInt(width), 40);
+        smoothArrayRef(pixelAvg, juce::roundToInt(width), 40);
+        
+        juce::Path minPath, maxPath, avgPath, shadedPath;
+        bool firstRef = true;
+        
+        for (int x = 0; x <= juce::roundToInt(width); ++x) {
+            auto getY = [&](float db) {
+                float level = juce::jmap(juce::jlimit(minDecibels, maxDecibels, db), minDecibels, maxDecibels, 0.0f, 1.0f);
+                return bottom - level * height;
+            };
+            
+            float yMin = getY(pixelMin[x]);
+            float yMax = getY(pixelMax[x]);
+            float yAvg = getY(pixelAvg[x]);
+            
+            if (firstRef) {
+                minPath.startNewSubPath(left + x, yMin);
+                maxPath.startNewSubPath(left + x, yMax);
+                avgPath.startNewSubPath(left + x, yAvg);
+                firstRef = false;
+            } else {
+                minPath.lineTo(left + x, yMin);
+                maxPath.lineTo(left + x, yMax);
+                avgPath.lineTo(left + x, yAvg);
+            }
+        }
+        
+        // Build shaded path
+        firstRef = true;
+        for (int x = 0; x <= juce::roundToInt(width); ++x) {
+            float yMax = bottom - juce::jmap(juce::jlimit(minDecibels, maxDecibels, pixelMax[x]), minDecibels, maxDecibels, 0.0f, 1.0f) * height;
+            if (firstRef) { shadedPath.startNewSubPath(left + x, yMax); firstRef = false; }
+            else shadedPath.lineTo(left + x, yMax);
+        }
+        for (int x = juce::roundToInt(width); x >= 0; --x) {
+            float yMin = bottom - juce::jmap(juce::jlimit(minDecibels, maxDecibels, pixelMin[x]), minDecibels, maxDecibels, 0.0f, 1.0f) * height;
+            shadedPath.lineTo(left + x, yMin);
+        }
+        shadedPath.closeSubPath();
+        
+        g.setColour(juce::Colours::lightgreen.withAlpha(0.1f));
+        g.fillPath(shadedPath);
+        
+        g.setColour(juce::Colours::lightgreen.withAlpha(0.6f));
+        g.strokePath(avgPath, juce::PathStrokeType(2.0f));
+        
+        g.setColour(juce::Colours::lightgreen.withAlpha(0.2f));
+        g.strokePath(maxPath, juce::PathStrokeType(1.0f));
+        g.strokePath(minPath, juce::PathStrokeType(1.0f));
     }
 
     // 2. Draw Grids
@@ -701,6 +902,10 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
             
             g.setColour(juce::Colours::white.withAlpha(0.8f));
             g.drawHorizontalLine(targetY, (float)area.getX(), (float)area.getRight());
+            
+            // Draw the target value text
+            g.setFont(juce::FontOptions(11.0f));
+            g.drawText(juce::String(targetLufs, 1), area.getX() - 30, targetY - 6, 28, 12, juce::Justification::centredRight, false);
         }
 
         // Draw outline

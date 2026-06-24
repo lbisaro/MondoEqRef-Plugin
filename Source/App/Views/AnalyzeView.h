@@ -14,6 +14,7 @@ public:
     
     std::function<void(int)> onRequestTabChange;
     std::function<void(bool)> onPlayStateChanged;
+    std::function<void(float, float)> onNormalizeRequested;
     
     bool getIsPlaying() const { return isPlaying; }
     void setIsPlaying(bool shouldPlay);
@@ -23,9 +24,12 @@ public:
     juce::Label debugLabel;
     
     void setLoadedFileName(const juce::String& name);
+    void setCurrentStemFile(const juce::File& file);
+    juce::File getCurrentStemFile() const { return currentStemFile; }
 
 private:
     void updatePlayStopButton();
+    void saveStemReference();
 
     MondoEqRefAudioProcessor& processor;
     std::unique_ptr<juce::AudioProcessorEditor> processorEditor;
@@ -35,7 +39,10 @@ private:
     juce::ComboBox trackSelector;
     juce::Label loadedFileNameLabel;
     juce::TextButton playStopButton;
+    juce::TextButton saveRefButton{"Save Ref"};
+    juce::TextButton normalizeButton{"Normalize"};
     
+    juce::File currentStemFile;
     bool isPlaying = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AnalyzeView)

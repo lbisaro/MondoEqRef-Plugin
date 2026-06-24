@@ -92,7 +92,7 @@ void StemsView::resized()
 bool StemsView::isInterestedInFileDrag(const juce::StringArray& files)
 {
     for (auto file : files)
-        if (file.endsWithIgnoreCase(".wav"))
+        if (file.endsWithIgnoreCase(".wav") || file.endsWithIgnoreCase(".mp3"))
             return true;
     return false;
 }
@@ -106,7 +106,7 @@ void StemsView::filesDropped(const juce::StringArray& files, int x, int y)
     for (auto path : files)
     {
         juce::File sourceFile(path);
-        if (sourceFile.existsAsFile() && sourceFile.hasFileExtension(".wav"))
+        if (sourceFile.existsAsFile() && (sourceFile.hasFileExtension(".wav") || sourceFile.hasFileExtension(".mp3")))
         {
             juce::File destFile = stemsDir.getChildFile(sourceFile.getFileName());
             if (sourceFile.copyFileTo(destFile))
@@ -121,9 +121,9 @@ void StemsView::filesDropped(const juce::StringArray& files, int x, int y)
 void StemsView::importStemViaDialog()
 {
     fileChooser = std::make_unique<juce::FileChooser>(
-        "Seleccionar archivo WAV",
+        "Seleccionar archivo de Audio",
         juce::File::getSpecialLocation(juce::File::userMusicDirectory),
-        "*.wav"
+        "*.wav;*.mp3"
     );
 
     auto folderChooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
@@ -168,7 +168,7 @@ void StemsView::refreshList()
     // listContainer children are automatically removed and deleted by OwnedArray
     
     juce::File stemsDir = DeviceRoutingManager::getStemsDirectory();
-    juce::Array<juce::File> wavFiles = stemsDir.findChildFiles(juce::File::findFiles, false, "*.wav");
+    juce::Array<juce::File> audioFiles = stemsDir.findChildFiles(juce::File::findFiles, false, "*.wav;*.mp3");
 
     int itemHeight = 40;
     int yOffset = 0;
@@ -176,7 +176,7 @@ void StemsView::refreshList()
     // Use a reasonable default width if not yet resized
     int listWidth = juce::jmax(400, viewport.getMaximumVisibleWidth());
 
-    for (auto& file : wavFiles)
+    for (auto& file : audioFiles)
     {
         auto* item = new StemItemComponent(
             file,

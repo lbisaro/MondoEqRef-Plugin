@@ -25,91 +25,63 @@
                     "tip": ""
                 }
             ],
-            "description": "Tono de fondo líquido y transparente, optimizado para no competir con teclados y voces",
+            "description": "Tono de fondo l\u00edquido y transparente, optimizado para no competir con teclados y voces",
             "frequency_points": [
                 {
                     "f": 20,
-                    "target": -100.0,
-                    "max_limit": -55.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 },
                 {
                     "f": 60,
-                    "target": -75.0,
-                    "max_limit": -35.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 },
                 {
                     "f": 80,
-                    "target": -42.0,
-                    "max_limit": -30.0,
-                    "min_limit": -55.0
+                    "target": -42.0
                 },
                 {
                     "f": 100,
-                    "target": -36.0,
-                    "max_limit": -26.0,
-                    "min_limit": -46.0
+                    "target": -36.0
                 },
                 {
                     "f": 150,
-                    "target": -34.0,
-                    "max_limit": -26.0,
-                    "min_limit": -42.0
+                    "target": -34.0
                 },
                 {
                     "f": 300,
-                    "target": -38.0,
-                    "max_limit": -32.0,
-                    "min_limit": -44.0
+                    "target": -38.0
                 },
                 {
                     "f": 500,
-                    "target": -44.0,
-                    "max_limit": -38.0,
-                    "min_limit": -50.0
+                    "target": -44.0
                 },
                 {
                     "f": 1000,
-                    "target": -52.0,
-                    "max_limit": -46.0,
-                    "min_limit": -58.0
+                    "target": -52.0
                 },
                 {
                     "f": 2000,
-                    "target": -58.0,
-                    "max_limit": -52.0,
-                    "min_limit": -64.0
+                    "target": -58.0
                 },
                 {
                     "f": 4000,
-                    "target": -62.0,
-                    "max_limit": -56.0,
-                    "min_limit": -68.0
+                    "target": -60.0
                 },
                 {
                     "f": 6000,
-                    "target": -72.0,
-                    "max_limit": -62.0,
-                    "min_limit": -85.0
+                    "target": -60.0
                 },
                 {
                     "f": 8000,
-                    "target": -88.0,
-                    "max_limit": -76.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 },
                 {
                     "f": 12000,
-                    "target": -94.0,
-                    "max_limit": -85.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 },
                 {
                     "f": 20000,
-                    "target": -100.0,
-                    "max_limit": -90.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 }
             ],
             "lufs": -25.0
@@ -157,94 +129,66 @@
                     "min": 2000.0,
                     "max": 4000.0,
                     "color": "ffffffff",
-                    "tip": "Claridad rítmica controlada para no tapar los formantes de la voz principal"
+                    "tip": "Claridad r\u00edtmica controlada para no tapar los formantes de la voz principal"
                 }
             ],
-            "description": "Tono rítmico balanceado y enfocado, asentado debajo de la voz compartiendo plano con teclados",
+            "description": "Tono r\u00edtmico balanceado y enfocado, asentado debajo de la voz compartiendo plano con teclados",
             "frequency_points": [
                 {
                     "f": 20,
-                    "target": -100.0,
-                    "max_limit": -50.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 },
                 {
                     "f": 60,
-                    "target": -70.0,
-                    "max_limit": -32.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 },
                 {
                     "f": 80,
-                    "target": -34.0,
-                    "max_limit": -26.0,
-                    "min_limit": -42.0
+                    "target": -34.0
                 },
                 {
                     "f": 100,
-                    "target": -27.0,
-                    "max_limit": -21.0,
-                    "min_limit": -33.0
+                    "target": -27.0
                 },
                 {
                     "f": 150,
-                    "target": -25.0,
-                    "max_limit": -20.0,
-                    "min_limit": -30.0
+                    "target": -25.0
                 },
                 {
                     "f": 300,
-                    "target": -30.0,
-                    "max_limit": -24.0,
-                    "min_limit": -36.0
+                    "target": -30.0
                 },
                 {
                     "f": 500,
-                    "target": -41.0,
-                    "max_limit": -35.0,
-                    "min_limit": -47.0
+                    "target": -41.0
                 },
                 {
                     "f": 1000,
-                    "target": -48.0,
-                    "max_limit": -42.0,
-                    "min_limit": -54.0
+                    "target": -48.0
                 },
                 {
                     "f": 2000,
-                    "target": -52.0,
-                    "max_limit": -46.0,
-                    "min_limit": -58.0
+                    "target": -52.0
                 },
                 {
                     "f": 4000,
-                    "target": -56.0,
-                    "max_limit": -50.0,
-                    "min_limit": -62.0
+                    "target": -56.0
                 },
                 {
                     "f": 6000,
-                    "target": -72.0,
-                    "max_limit": -62.0,
-                    "min_limit": -82.0
+                    "target": -60.0
                 },
                 {
                     "f": 8000,
-                    "target": -90.0,
-                    "max_limit": -78.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 },
                 {
                     "f": 12000,
-                    "target": -96.0,
-                    "max_limit": -85.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 },
                 {
                     "f": 20000,
-                    "target": -100.0,
-                    "max_limit": -90.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 }
             ],
             "lufs": -22.0
@@ -278,108 +222,80 @@
                     "min": 80.0,
                     "max": 150.0,
                     "color": "ffffffff",
-                    "tip": "Corte de graves agresivo para ganar rango dinámico y nitidez de distorsión"
+                    "tip": "Corte de graves agresivo para ganar rango din\u00e1mico y nitidez de distorsi\u00f3n"
                 },
                 {
                     "name": "Voz",
                     "min": 800.0,
                     "max": 2000.0,
                     "color": "ffffffff",
-                    "tip": "Zona de proyección vocal: empujar para que las melodías rujan al frente"
+                    "tip": "Zona de proyecci\u00f3n vocal: empujar para que las melod\u00edas rujan al frente"
                 },
                 {
                     "name": "Definicion",
                     "min": 2000.0,
                     "max": 4000.0,
                     "color": "ffffffff",
-                    "tip": "Ataque y definición extrema de púa; vigilar asperezas (ice-pick)"
+                    "tip": "Ataque y definici\u00f3n extrema de p\u00faa; vigilar asperezas (ice-pick)"
                 }
             ],
-            "description": "Tono solista enfocado y proyectado al frente, con fuerte énfasis en medios para sobresalir",
+            "description": "Tono solista enfocado y proyectado al frente, con fuerte \u00e9nfasis en medios para sobresalir",
             "frequency_points": [
                 {
                     "f": 20,
-                    "target": -100.0,
-                    "max_limit": -60.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 },
                 {
                     "f": 60,
-                    "target": -85.0,
-                    "max_limit": -40.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 },
                 {
                     "f": 80,
-                    "target": -45.0,
-                    "max_limit": -35.0,
-                    "min_limit": -55.0
+                    "target": -45.0
                 },
                 {
                     "f": 100,
-                    "target": -35.0,
-                    "max_limit": -28.0,
-                    "min_limit": -42.0
+                    "target": -35.0
                 },
                 {
                     "f": 150,
-                    "target": -32.0,
-                    "max_limit": -26.0,
-                    "min_limit": -38.0
+                    "target": -32.0
                 },
                 {
                     "f": 300,
-                    "target": -30.0,
-                    "max_limit": -24.0,
-                    "min_limit": -36.0
+                    "target": -30.0
                 },
                 {
                     "f": 500,
-                    "target": -34.0,
-                    "max_limit": -28.0,
-                    "min_limit": -40.0
+                    "target": -34.0
                 },
                 {
                     "f": 1000,
-                    "target": -38.0,
-                    "max_limit": -32.0,
-                    "min_limit": -44.0
+                    "target": -38.0
                 },
                 {
                     "f": 2000,
-                    "target": -42.0,
-                    "max_limit": -36.0,
-                    "min_limit": -48.0
+                    "target": -42.0
                 },
                 {
                     "f": 4000,
-                    "target": -50.0,
-                    "max_limit": -44.0,
-                    "min_limit": -56.0
+                    "target": -50.0
                 },
                 {
                     "f": 6000,
-                    "target": -66.0,
-                    "max_limit": -56.0,
-                    "min_limit": -78.0
+                    "target": -60.0
                 },
                 {
                     "f": 8000,
-                    "target": -85.0,
-                    "max_limit": -72.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 },
                 {
                     "f": 12000,
-                    "target": -92.0,
-                    "max_limit": -80.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 },
                 {
                     "f": 20000,
-                    "target": -100.0,
-                    "max_limit": -90.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 }
             ],
             "lufs": -18.0
@@ -604,91 +520,63 @@
         {
             "name": "GTR GENERIC",
             "bands": [],
-            "description": "Curva promedio LTAS para guitarra eléctrica en mezcla estándar",
+            "description": "Curva promedio LTAS para guitarra el\u00e9ctrica en mezcla est\u00e1ndar",
             "frequency_points": [
                 {
                     "f": 20,
-                    "target": -100.0,
-                    "max_limit": -45.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 },
                 {
                     "f": 60,
-                    "target": -65.0,
-                    "max_limit": -30.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 },
                 {
                     "f": 80,
-                    "target": -32.0,
-                    "max_limit": -25.0,
-                    "min_limit": -45.0
+                    "target": -32.0
                 },
                 {
                     "f": 100,
-                    "target": -26.0,
-                    "max_limit": -20.0,
-                    "min_limit": -32.0
+                    "target": -26.0
                 },
                 {
                     "f": 150,
-                    "target": -25.0,
-                    "max_limit": -20.0,
-                    "min_limit": -30.0
+                    "target": -25.0
                 },
                 {
                     "f": 300,
-                    "target": -32.0,
-                    "max_limit": -26.0,
-                    "min_limit": -38.0
+                    "target": -32.0
                 },
                 {
                     "f": 500,
-                    "target": -38.0,
-                    "max_limit": -32.0,
-                    "min_limit": -44.0
+                    "target": -38.0
                 },
                 {
                     "f": 1000,
-                    "target": -46.0,
-                    "max_limit": -40.0,
-                    "min_limit": -52.0
+                    "target": -46.0
                 },
                 {
                     "f": 2000,
-                    "target": -50.0,
-                    "max_limit": -44.0,
-                    "min_limit": -56.0
+                    "target": -50.0
                 },
                 {
                     "f": 4000,
-                    "target": -55.0,
-                    "max_limit": -48.0,
-                    "min_limit": -62.0
+                    "target": -55.0
                 },
                 {
                     "f": 6000,
-                    "target": -68.0,
-                    "max_limit": -58.0,
-                    "min_limit": -80.0
+                    "target": -60.0
                 },
                 {
                     "f": 8000,
-                    "target": -85.0,
-                    "max_limit": -72.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 },
                 {
                     "f": 12000,
-                    "target": -92.0,
-                    "max_limit": -80.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 },
                 {
                     "f": 20000,
-                    "target": -100.0,
-                    "max_limit": -90.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 }
             ],
             "lufs": -22.0
@@ -696,91 +584,63 @@
         {
             "name": "GTR SOLO",
             "bands": [],
-            "description": "Tono masivo e hipercompleto diseñado para sonar sin acompañamiento, abarcando todo el rango",
+            "description": "Tono masivo e hipercompleto dise\u00f1ado para sonar sin acompa\u00f1amiento, abarcando todo el rango",
             "frequency_points": [
                 {
                     "f": 20,
-                    "target": -100.0,
-                    "max_limit": -40.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 },
                 {
                     "f": 60,
-                    "target": -60.0,
-                    "max_limit": -25.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 },
                 {
                     "f": 80,
-                    "target": -28.0,
-                    "max_limit": -20.0,
-                    "min_limit": -38.0
+                    "target": -28.0
                 },
                 {
                     "f": 100,
-                    "target": -22.0,
-                    "max_limit": -16.0,
-                    "min_limit": -28.0
+                    "target": -22.0
                 },
                 {
                     "f": 150,
-                    "target": -21.0,
-                    "max_limit": -15.0,
-                    "min_limit": -27.0
+                    "target": -21.0
                 },
                 {
                     "f": 300,
-                    "target": -28.0,
-                    "max_limit": -22.0,
-                    "min_limit": -34.0
+                    "target": -28.0
                 },
                 {
                     "f": 500,
-                    "target": -34.0,
-                    "max_limit": -28.0,
-                    "min_limit": -40.0
+                    "target": -34.0
                 },
                 {
                     "f": 1000,
-                    "target": -42.0,
-                    "max_limit": -36.0,
-                    "min_limit": -48.0
+                    "target": -42.0
                 },
                 {
                     "f": 2000,
-                    "target": -46.0,
-                    "max_limit": -40.0,
-                    "min_limit": -52.0
+                    "target": -46.0
                 },
                 {
                     "f": 4000,
-                    "target": -50.0,
-                    "max_limit": -44.0,
-                    "min_limit": -56.0
+                    "target": -50.0
                 },
                 {
                     "f": 6000,
-                    "target": -62.0,
-                    "max_limit": -52.0,
-                    "min_limit": -72.0
+                    "target": -60.0
                 },
                 {
                     "f": 8000,
-                    "target": -80.0,
-                    "max_limit": -68.0,
-                    "min_limit": -92.0
+                    "target": -60.0
                 },
                 {
                     "f": 12000,
-                    "target": -88.0,
-                    "max_limit": -76.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 },
                 {
                     "f": 20000,
-                    "target": -100.0,
-                    "max_limit": -85.0,
-                    "min_limit": -100.0
+                    "target": -60.0
                 }
             ],
             "lufs": -20.5

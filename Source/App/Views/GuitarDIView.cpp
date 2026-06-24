@@ -220,9 +220,9 @@ void GuitarDIView::filesDropped(const juce::StringArray& files, int x, int y)
 void GuitarDIView::importDiViaDialog()
 {
     fileChooser = std::make_unique<juce::FileChooser>(
-        "Seleccionar archivo WAV (Guitar DI)",
+        "Seleccionar archivo de Audio (Guitar DI)",
         juce::File::getSpecialLocation(juce::File::userMusicDirectory),
-        "*.wav"
+        "*.wav;*.mp3"
     );
 
     auto folderChooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;

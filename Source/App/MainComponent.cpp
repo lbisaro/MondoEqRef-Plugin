@@ -1,4 +1,5 @@
 #include "MainComponent.h"
+#include "AudioNormalizer.h"
 
 MainComponent::MainComponent()
 {
@@ -51,21 +52,34 @@ MainComponent::MainComponent()
 
     // Stem Setup
     formatManager.registerBasicFormats();
+    formatManager.registerFormat(new juce::MP3AudioFormat(), false);
     stemsView.onStemLoadRequested = [this, showView](const juce::File& f) {
         loadStemFile(f);
         showView(0); // Cambiar a pestaña Analyze
     };
-    
     analyzeView.onPlayStateChanged = [this](bool play) {
-        if (stemTransportSource != nullptr)
-        {
-            if (play) stemTransportSource->start();
-            else      stemTransportSource->stop();
+        if (play) {
+            int mode = analyzeView.getTrackMode();
+            if (mode == 2 && diTransportSource != nullptr) {
+                diTransportSource->start();
+            } else if (mode == 3 && stemTransportSource != nullptr) {
+                stemTransportSource->start();
+            }
+        } else {
+            if (diTransportSource != nullptr) diTransportSource->stop();
+            if (stemTransportSource != nullptr) stemTransportSource->stop();
         }
-        if (diTransportSource != nullptr)
-        {
-            if (play) diTransportSource->start();
-            else      diTransportSource->stop();
+    };
+    
+    analyzeView.onNormalizeRequested = [this](float targetLufs, float measuredLufs) {
+        if (analyzeView.getTrackMode() == 3) {
+            juce::File currentStem = analyzeView.getCurrentStemFile();
+            if (currentStem.existsAsFile()) {
+                if (AudioNormalizer::normalizeFile(currentStem, targetLufs, measuredLufs, formatManager)) {
+                    // Reload the file if normalization succeeded
+                    loadStemFile(currentStem);
+                }
+            }
         }
     };
     
@@ -361,7 +375,6 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
     }
     else if (trackMode == 2) // Guitar DI Reamping
     {
-        bufferToFill.clearActiveBufferRegion();
         juce::ScopedLock sl(audioLock);
         
         juce::AudioBuffer<float> dryDiBuffer(1, bufferToFill.numSamples);
@@ -417,11 +430,21 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
 
         processor.processBlock(eqInput, midi);
 
-        if (denseOutCh >= 0 && denseOutCh < bufferToFill.buffer->getNumChannels())
+        // Enviar el Stem de salida por el mismo canal físico seleccionado para el Processed Input
+        int physicalStemOutCh = routingManager.lastUsedProfile.processedInputChannel;
+        int stemDenseOutCh = -1;
+        if (physicalStemOutCh >= 0 && activeOuts[physicalStemOutCh])
         {
-            bufferToFill.buffer->addFrom(denseOutCh, bufferToFill.startSample, eqInput, 0, 0, eqInput.getNumSamples());
-            if (denseOutCh + 1 < bufferToFill.buffer->getNumChannels())
-                bufferToFill.buffer->addFrom(denseOutCh + 1, bufferToFill.startSample, eqInput, 1, 0, eqInput.getNumSamples());
+            stemDenseOutCh = 0;
+            for (int i = 0; i < physicalStemOutCh; ++i)
+                if (activeOuts[i]) stemDenseOutCh++;
+        }
+
+        if (stemDenseOutCh >= 0 && stemDenseOutCh < bufferToFill.buffer->getNumChannels())
+        {
+            bufferToFill.buffer->addFrom(stemDenseOutCh, bufferToFill.startSample, eqInput, 0, 0, eqInput.getNumSamples());
+            if (stemDenseOutCh + 1 < bufferToFill.buffer->getNumChannels())
+                bufferToFill.buffer->addFrom(stemDenseOutCh + 1, bufferToFill.startSample, eqInput, 1, 0, eqInput.getNumSamples());
         }
         return;
     }
@@ -472,6 +495,7 @@ void MainComponent::loadStemFile(const juce::File& file)
         // Cambiar a track mode Stem
         analyzeView.setTrackMode(3); // 3 = Stems
         analyzeView.setLoadedFileName(file.getFileName());
+        analyzeView.setCurrentStemFile(file);
     }
 }
 
