@@ -276,7 +276,7 @@ void MondoEqRefAudioProcessorEditor::updateFftSize()
     currentFftSize = 1 << currentFftOrder;
     
     forwardFFT = std::make_unique<juce::dsp::FFT>(currentFftOrder);
-    window = std::make_unique<juce::dsp::WindowingFunction<float>>(currentFftSize, juce::dsp::WindowingFunction<float>::hann);
+    window = std::make_unique<juce::dsp::WindowingFunction<float>>(currentFftSize, juce::dsp::WindowingFunction<float>::blackmanHarris);
     
     fifo.assign(currentFftSize, 0.0f);
     fftData.assign(currentFftSize * 2, 0.0f);
