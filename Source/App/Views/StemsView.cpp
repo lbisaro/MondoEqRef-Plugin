@@ -1,5 +1,6 @@
 #include "StemsView.h"
 #include "../DeviceRouting.h"
+#include "../AudioNormalizer.h"
 
 // Componente para cada fila de archivo
 class StemItemComponent : public juce::Component
@@ -108,8 +109,8 @@ void StemsView::filesDropped(const juce::StringArray& files, int x, int y)
         juce::File sourceFile(path);
         if (sourceFile.existsAsFile() && (sourceFile.hasFileExtension(".wav") || sourceFile.hasFileExtension(".mp3")))
         {
-            juce::File destFile = stemsDir.getChildFile(sourceFile.getFileName());
-            if (sourceFile.copyFileTo(destFile))
+            juce::File destFile = stemsDir.getChildFile(sourceFile.getFileNameWithoutExtension() + ".wav");
+            if (AudioNormalizer::importAndResample(sourceFile, destFile, 48000.0, 30.0))
                 anyCopied = true;
         }
     }
@@ -134,8 +135,8 @@ void StemsView::importStemViaDialog()
         if (result.existsAsFile())
         {
             juce::File stemsDir = DeviceRoutingManager::getStemsDirectory();
-            juce::File destFile = stemsDir.getChildFile(result.getFileName());
-            if (result.copyFileTo(destFile))
+            juce::File destFile = stemsDir.getChildFile(result.getFileNameWithoutExtension() + ".wav");
+            if (AudioNormalizer::importAndResample(result, destFile, 48000.0, 30.0))
             {
                 refreshList();
             }

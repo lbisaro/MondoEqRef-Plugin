@@ -25,7 +25,16 @@ MondoEqRefAudioProcessorEditor::MondoEqRefAudioProcessorEditor (MondoEqRefAudioP
     targetRoleBox.onChange = [this]() { targetRoleChanged(); };
     addAndMakeVisible(targetRoleBox);
 
-    resetButton.setButtonText("Reset");
+    reloadTargetsButton.setButtonText("Refresh");
+    reloadTargetsButton.onClick = [this]() {
+        int currentId = targetRoleBox.getSelectedId();
+        loadTargets();
+        targetRoleBox.setSelectedId(currentId, juce::dontSendNotification);
+        targetRoleChanged();
+    };
+    addAndMakeVisible(reloadTargetsButton);
+
+    resetButton.setButtonText("Reset (R)");
     resetButton.onClick = [this] {
         std::fill(representativeCurve.begin(), representativeCurve.end(), 0.0f);
         std::fill(sumCurve.begin(), sumCurve.end(), 0.0f);
@@ -942,8 +951,8 @@ void MondoEqRefAudioProcessorEditor::resized()
 
     targetRoleLabel.setBounds(fftSizeBox.getRight() + 20, 5, 50, 20);
     targetRoleBox.setBounds(targetRoleLabel.getRight() + 5, 5, 200, 20);
-
-    resetButton.setBounds(targetRoleBox.getRight() + 20, 5, 100, 20);
+    reloadTargetsButton.setBounds(targetRoleBox.getRight() + 5, 5, 60, 20);
+    resetButton.setBounds(reloadTargetsButton.getRight() + 20, 5, 100, 20);
     tiltButton.setBounds(resetButton.getRight() + 20, 5, 120, 20);
     
     // Position targetOffsetSlider vertically on the left

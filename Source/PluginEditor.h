@@ -56,6 +56,7 @@ private:
     
     juce::ComboBox targetRoleBox;
     juce::Label targetRoleLabel;
+    juce::TextButton reloadTargetsButton;
 
     juce::TextButton resetButton;
     juce::ToggleButton tiltButton { "Tilt +4.5dB/Oct" };
