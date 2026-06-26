@@ -60,13 +60,11 @@ public:
     void resetLufs() {
         lufsSumSquares = 0.0;
         lufsSampleCount = 0;
-        for (auto& b : shortTermBlocks) {
-            b.sumSquares = 0.0;
-            b.samples = 0;
-        }
         shortTermSumSquares = 0.0;
         shortTermSampleCount = 0;
     }
+    
+    std::atomic<bool> triggerReset{false};
     
     float getIntegratedLufs() const {
         int64_t count = lufsSampleCount.load();

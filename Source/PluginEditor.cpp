@@ -38,6 +38,11 @@ MondoEqRefAudioProcessorEditor::MondoEqRefAudioProcessorEditor (MondoEqRefAudioP
     resetButton.onClick = [this] {
         std::fill(representativeCurve.begin(), representativeCurve.end(), 0.0f);
         std::fill(sumCurve.begin(), sumCurve.end(), 0.0f);
+        std::fill(representativeCurveHann.begin(), representativeCurveHann.end(), 0.0f);
+        std::fill(sumCurveHann.begin(), sumCurveHann.end(), 0.0f);
+        std::fill(maxPeakCurve.begin(), maxPeakCurve.end(), 0.0f);
+        std::fill(scopeData.begin(), scopeData.end(), 0.0f);
+        std::fill(scopeDataHann.begin(), scopeDataHann.end(), 0.0f);
         validFrameCount = 0;
         audioProcessor.resetLufs();
         repaint();
@@ -276,19 +281,36 @@ void MondoEqRefAudioProcessorEditor::updateFftSize()
     currentFftSize = 1 << currentFftOrder;
     
     forwardFFT = std::make_unique<juce::dsp::FFT>(currentFftOrder);
-    window = std::make_unique<juce::dsp::WindowingFunction<float>>(currentFftSize, juce::dsp::WindowingFunction<float>::blackmanHarris);
+    windowHann = std::make_unique<juce::dsp::WindowingFunction<float>>(currentFftSize, juce::dsp::WindowingFunction<float>::hann);
+    windowBH = std::make_unique<juce::dsp::WindowingFunction<float>>(currentFftSize, juce::dsp::WindowingFunction<float>::blackmanHarris);
     
     fifo.assign(currentFftSize, 0.0f);
     fftData.assign(currentFftSize * 2, 0.0f);
     scopeData.assign(currentFftSize / 2, 0.0f);
     representativeCurve.assign(currentFftSize / 2, 0.0f);
     sumCurve.assign(currentFftSize / 2, 0.0f);
+    maxPeakCurve.assign(currentFftSize / 2, 0.0f);
+
+    scopeDataHann.assign(currentFftSize / 2, 0.0f);
+    representativeCurveHann.assign(currentFftSize / 2, 0.0f);
+    sumCurveHann.assign(currentFftSize / 2, 0.0f);
     validFrameCount = 0;
     fifoIndex = 0;
 }
 
 void MondoEqRefAudioProcessorEditor::timerCallback()
 {
+    if (audioProcessor.triggerReset.exchange(false)) {
+        audioProcessor.resetLufs();
+        std::fill(scopeData.begin(), scopeData.end(), 0.0f);
+        std::fill(scopeDataHann.begin(), scopeDataHann.end(), 0.0f);
+        std::fill(maxPeakCurve.begin(), maxPeakCurve.end(), -100.0f); // or 0.0f depending on type, it's linear so 0.0f
+        std::fill(maxPeakCurve.begin(), maxPeakCurve.end(), 0.0f);
+        std::fill(sumCurve.begin(), sumCurve.end(), 0.0f);
+        std::fill(sumCurveHann.begin(), sumCurveHann.end(), 0.0f);
+        validFrameCount = 0;
+    }
+
     int procFifoCount = audioProcessor.fifoIndex.load();
     if (procFifoCount > 0)
     {
@@ -324,18 +346,26 @@ void MondoEqRefAudioProcessorEditor::pushNextSampleIntoFifo (float sample) noexc
 
 void MondoEqRefAudioProcessorEditor::drawNextFrameOfSpectrum()
 {
-    window->multiplyWithWindowingTable (fftData.data(), (size_t) currentFftSize);
-    forwardFFT->performFrequencyOnlyForwardTransform (fftData.data());
+    std::vector<float> fftDataHann = fftData;
+    std::vector<float> fftDataBH = fftData;
+
+    windowHann->multiplyWithWindowingTable (fftDataHann.data(), (size_t) currentFftSize);
+    forwardFFT->performFrequencyOnlyForwardTransform (fftDataHann.data());
+
+    windowBH->multiplyWithWindowingTable (fftDataBH.data(), (size_t) currentFftSize);
+    forwardFFT->performFrequencyOnlyForwardTransform (fftDataBH.data());
 
     float maxMag = 0.0f;
     for (int i = 0; i < currentFftSize / 2; ++i)
     {
-        float magnitude = (fftData[i] * 4.0f) / (float)currentFftSize;
+        float magnitudeBH = (fftDataBH[i] * 4.0f) / (float)currentFftSize;
+        float magnitudeHann = (fftDataHann[i] * 4.0f) / (float)currentFftSize;
         
-        if (magnitude > maxMag) maxMag = magnitude;
+        if (magnitudeBH > maxMag) maxMag = magnitudeBH;
         
         // Smoothing in magnitude domain for display
-        scopeData[i] = scopeData[i] * 0.8f + magnitude * 0.2f;
+        scopeData[i] = scopeData[i] * 0.8f + magnitudeBH * 0.2f;
+        scopeDataHann[i] = scopeDataHann[i] * 0.8f + magnitudeHann * 0.2f;
     }
     
     // Noise Gate: only include frame in average if signal is detected (> -80dB approx)
@@ -346,6 +376,10 @@ void MondoEqRefAudioProcessorEditor::drawNextFrameOfSpectrum()
         {
             sumCurve[i] += scopeData[i];
             representativeCurve[i] = sumCurve[i] / (float)validFrameCount;
+            maxPeakCurve[i] = juce::jmax(maxPeakCurve[i], scopeData[i]);
+
+            sumCurveHann[i] += scopeDataHann[i];
+            representativeCurveHann[i] = sumCurveHann[i] / (float)validFrameCount;
         }
     }
     
@@ -366,6 +400,7 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
     plotArea.removeFromTop(40); // header
     plotArea.removeFromRight(40); // dB scale
     plotArea.removeFromBottom(20); // Freq scale
+    auto crestFactorArea = plotArea.removeFromTop(30); // CF metrics
 
     float left = (float)plotArea.getX();
     float bottom = (float)plotArea.getBottom();
@@ -471,7 +506,7 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
                 for (const auto& pt : target.points)
                 {
                     float tiltOffset = isTiltEnabled ? 4.5f * std::log2(pt.f / 1000.0f) : 0.0f;
-                    float tiltedTarget = pt.target + tiltOffset;
+                    float tiltedTarget = pt.target + tiltOffset + currentTargetOffset;
                 
                     float normFreq = (std::log10(pt.f) - minLogFreq) / (maxLogFreq - minLogFreq);
                     float px = left + width * std::pow(normFreq, skewFactor);
@@ -674,7 +709,19 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
         juce::String text = f >= 1000.0f ? juce::String(f / 1000.0f, 0) + "k" : juce::String(f, 0);
         g.drawText(text, (int)x - 20, (int)bottom + 2, 40, 15, juce::Justification::centredTop, false);
         g.setColour(juce::Colours::white.withAlpha(0.1f));
+        g.setColour(juce::Colours::white.withAlpha(0.1f));
     }
+
+    // Custom 300Hz and 2000Hz soft guidelines
+    auto drawCrossoverLine = [&](float f) {
+        float normX = (std::log10(f) - minLogFreq) / (maxLogFreq - minLogFreq);
+        float x = left + width * std::pow(normX, skewFactor);
+        g.setColour(juce::Colours::yellow.withAlpha(0.3f));
+        const float dashes[] = { 4.0f, 4.0f };
+        g.drawDashedLine(juce::Line<float>(x, (float)plotArea.getY(), x, bottom), dashes, 2, 1.5f);
+    };
+    drawCrossoverLine(300.0f);
+    drawCrossoverLine(2000.0f);
 
     // dB grid
     for (float db = -120.0f; db <= 24.0f; db += 10.0f)
@@ -693,11 +740,15 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
 
     // 3. Draw Curves
     juce::Path spectrumPath;
-    juce::Path peakPath;
+    juce::Path peakPath; // Average path
+    juce::Path hannPath;
+    juce::Path maxPeakPath; // True peak path
     bool first = true;
 
     std::vector<float> pixelLiveMax(juce::roundToInt(width) + 1, -100.0f);
-    std::vector<float> pixelPeakMax(juce::roundToInt(width) + 1, -100.0f);
+    std::vector<float> pixelPeakMax(juce::roundToInt(width) + 1, -100.0f); // Average
+    std::vector<float> pixelLiveHann(juce::roundToInt(width) + 1, -100.0f);
+    std::vector<float> pixelTruePeak(juce::roundToInt(width) + 1, -100.0f);
 
     float binFreq = (float)audioProcessor.getSampleRate() / (float)currentFftSize;
 
@@ -719,8 +770,16 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
         float rawPeakDb = juce::Decibels::gainToDecibels(representativeCurve[i], -100.0f);
         float peakDbLevel = rawPeakDb > -99.9f ? rawPeakDb + tilt : -100.0f;
 
+        float rawHannDb = juce::Decibels::gainToDecibels(scopeDataHann[i], -100.0f);
+        float hannDbLevel = rawHannDb > -99.9f ? rawHannDb + tilt : -100.0f;
+
+        float rawTruePeakDb = juce::Decibels::gainToDecibels(maxPeakCurve[i], -100.0f);
+        float truePeakDbLevel = rawTruePeakDb > -99.9f ? rawTruePeakDb + tilt : -100.0f;
+
         pixelLiveMax[xPixel] = juce::jmax(pixelLiveMax[xPixel], dbLevel);
         pixelPeakMax[xPixel] = juce::jmax(pixelPeakMax[xPixel], peakDbLevel);
+        pixelLiveHann[xPixel] = juce::jmax(pixelLiveHann[xPixel], hannDbLevel);
+        pixelTruePeak[xPixel] = juce::jmax(pixelTruePeak[xPixel], truePeakDbLevel);
     }
     
     // Fill empty pixels with linear interpolation
@@ -751,6 +810,8 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
     
     interpolateGaps(pixelLiveMax, juce::roundToInt(width));
     interpolateGaps(pixelPeakMax, juce::roundToInt(width));
+    interpolateGaps(pixelLiveHann, juce::roundToInt(width));
+    interpolateGaps(pixelTruePeak, juce::roundToInt(width));
 
     // Visual smoothing pass (Moving Average) to round out the straight lines in the low end
     auto smoothArray = [&](std::vector<float>& arr, int w, int radius) {
@@ -770,10 +831,15 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
     // Apply a 5-pixel radius visual smoothing
     smoothArray(pixelLiveMax, juce::roundToInt(width), 5);
     smoothArray(pixelPeakMax, juce::roundToInt(width), 5);
+    smoothArray(pixelLiveHann, juce::roundToInt(width), 5);
+    smoothArray(pixelTruePeak, juce::roundToInt(width), 5);
     
     std::vector<float> pixelSmoothedMax = pixelPeakMax;
     // Apply a 40-pixel radius visual smoothing to create the 'General Shape' contour
     smoothArray(pixelSmoothedMax, juce::roundToInt(width), 40);
+
+    std::vector<float> pixelSmoothedTruePeak = pixelTruePeak;
+    smoothArray(pixelSmoothedTruePeak, juce::roundToInt(width), 40);
 
     juce::Path smoothedPath;
     first = true;
@@ -783,6 +849,8 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
         float dbLevel = pixelLiveMax[x];
         float peakDbLevel = pixelPeakMax[x];
         float smoothedDbLevel = pixelSmoothedMax[x];
+        float hannDbLevel = pixelLiveHann[x];
+        float truePeakDbLevel = pixelSmoothedTruePeak[x];
         
         float level = juce::jmap(juce::jlimit(minDecibels, maxDecibels, dbLevel), minDecibels, maxDecibels, 0.0f, 1.0f);
         float y = bottom - level * height;
@@ -793,11 +861,19 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
         float smoothedLevel = juce::jmap(juce::jlimit(minDecibels, maxDecibels, smoothedDbLevel), minDecibels, maxDecibels, 0.0f, 1.0f);
         float smoothedY = bottom - smoothedLevel * height;
 
+        float hannLevel = juce::jmap(juce::jlimit(minDecibels, maxDecibels, hannDbLevel), minDecibels, maxDecibels, 0.0f, 1.0f);
+        float hannY = bottom - hannLevel * height;
+
+        float truePeakLevel = juce::jmap(juce::jlimit(minDecibels, maxDecibels, truePeakDbLevel), minDecibels, maxDecibels, 0.0f, 1.0f);
+        float truePeakY = bottom - truePeakLevel * height;
+
         if (first)
         {
             spectrumPath.startNewSubPath(left + x, y);
             peakPath.startNewSubPath(left + x, peakY);
             smoothedPath.startNewSubPath(left + x, smoothedY);
+            hannPath.startNewSubPath(left + x, hannY);
+            maxPeakPath.startNewSubPath(left + x, truePeakY);
             first = false;
         }
         else
@@ -805,20 +881,30 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
             spectrumPath.lineTo(left + x, y);
             peakPath.lineTo(left + x, peakY);
             smoothedPath.lineTo(left + x, smoothedY);
+            hannPath.lineTo(left + x, hannY);
+            maxPeakPath.lineTo(left + x, truePeakY);
         }
     }
 
-    // Draw Live Curve
+    // Draw Live Curve (BH)
     g.setColour(juce::Colours::cyan.withAlpha(0.8f));
     g.strokePath(spectrumPath, juce::PathStrokeType(1.5f));
 
-    // Draw Normal Peak Hold (without shading)
+    // Draw Hann Curve
+    g.setColour(juce::Colours::green.withAlpha(0.8f));
+    g.strokePath(hannPath, juce::PathStrokeType(1.5f));
+
+    // Draw Average (Peak) Hold (without shading)
     g.setColour(juce::Colours::cyan.withAlpha(0.3f));
     g.strokePath(peakPath, juce::PathStrokeType(1.0f));
 
-    // Draw Smoothed Contour Peak Hold
+    // Draw Smoothed Contour Average
     g.setColour(juce::Colours::yellow.withAlpha(0.8f));
     g.strokePath(smoothedPath, juce::PathStrokeType(2.0f));
+
+    // Draw True Max Peak
+    g.setColour(juce::Colours::yellow.withAlpha(0.3f));
+    g.strokePath(maxPeakPath, juce::PathStrokeType(1.5f));
 
     // 4. Mouse Crosshair & Measurement
     if (isMouseOverPlot && plotArea.contains(mousePos))
@@ -832,10 +918,9 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
         
         float normY = (bottom - mouseY) / height;
         float db = juce::jmap(normY, 0.0f, 1.0f, minDecibels, maxDecibels);
-
-        // Draw crosshair
+        
         g.setColour(juce::Colours::white.withAlpha(0.3f));
-        float dashes[] = {3.0f, 4.0f};
+        const float dashes[] = { 4.0f, 4.0f };
         g.drawDashedLine(juce::Line<float>(mouseX, (float)plotArea.getY(), mouseX, bottom), dashes, 2, 1.0f);
         g.drawDashedLine(juce::Line<float>(left, mouseY, (float)plotArea.getRight(), mouseY), dashes, 2, 1.0f);
 
@@ -874,6 +959,91 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
         g.drawText(text, textX, textY, textWidth, 22, juce::Justification::centred, false);
     }
 
+    // 5. Draw Crest Factor Metrics at the top
+    float newLowCF = 0.0f;
+    float newMidCF = 0.0f;
+    float newHiCF = 0.0f;
+    
+    if (validFrameCount > 0 && !representativeCurve.empty() && !maxPeakCurve.empty())
+    {
+        auto calcCrestFactor = [&](float minF, float maxF) -> float {
+            float sampleRate = (float)audioProcessor.getSampleRate();
+            if (sampleRate <= 0.0f) return 0.0f;
+            
+            int numBins = (int)representativeCurve.size();
+            float binWidth = sampleRate / (float)currentFftSize;
+            
+            int startBin = (int)(minF / binWidth);
+            int endBin = (int)(maxF / binWidth);
+            
+            startBin = juce::jlimit(0, numBins - 1, startBin);
+            endBin = juce::jlimit(0, numBins - 1, endBin);
+            
+            if (startBin >= endBin) return 0.0f;
+            
+            float totalGap = 0.0f;
+            int count = 0;
+            for (int i = startBin; i <= endBin; ++i) {
+                float avgLin = representativeCurve[i];
+                float maxLin = maxPeakCurve[i];
+                if (avgLin > 1e-10f && maxLin > 1e-10f) {
+                    float peakDb = juce::Decibels::gainToDecibels(maxLin, -100.0f);
+                    float avgDb = juce::Decibels::gainToDecibels(avgLin, -100.0f);
+                    if (peakDb > avgDb) {
+                        totalGap += (peakDb - avgDb);
+                        count++;
+                    }
+                }
+            }
+            return count > 0 ? (totalGap / (float)count) : 0.0f;
+        };
+        
+        newLowCF = calcCrestFactor(80.0f, 300.0f);
+        newMidCF = calcCrestFactor(300.0f, 2000.0f);
+        newHiCF = calcCrestFactor(2000.0f, 5000.0f);
+    }
+    
+    if (validFrameCount > 0)
+    {
+        
+        g.setColour(juce::Colours::black.withAlpha(0.6f));
+        g.fillRect(crestFactorArea);
+        
+        g.setColour(juce::Colours::white);
+        g.setFont(14.0f);
+        
+        float colWidth = crestFactorArea.getWidth() / 3.0f;
+        
+        auto drawCrestBar = [&](juce::Rectangle<int> area, const juce::String& label, float cf, float minTarget, float maxTarget) {
+            g.setColour(juce::Colours::white.withAlpha(0.7f));
+            g.drawText(label + ": " + juce::String(cf, 1) + " dB", area.removeFromTop(15), juce::Justification::centred, false);
+            
+            auto barArea = area.reduced(10, 4);
+            g.setColour(juce::Colours::darkgrey);
+            g.fillRect(barArea);
+            
+            // Map 0-25dB to 0-100% width
+            float fillWidth = juce::jmap(cf, 0.0f, 25.0f, 0.0f, (float)barArea.getWidth());
+            fillWidth = juce::jlimit(0.0f, (float)barArea.getWidth(), fillWidth);
+            
+            juce::Colour fillColour = juce::Colours::yellow;
+            if (cf >= minTarget && cf <= maxTarget) {
+                fillColour = juce::Colours::lightgreen;
+            }
+            
+            g.setColour(fillColour.withAlpha(0.8f));
+            g.fillRect(barArea.withWidth((int)fillWidth));
+        };
+        
+        juce::Rectangle<int> r1(crestFactorArea.getX(), crestFactorArea.getY(), (int)colWidth, crestFactorArea.getHeight());
+        juce::Rectangle<int> r2((int)(crestFactorArea.getX() + colWidth), crestFactorArea.getY(), (int)colWidth, crestFactorArea.getHeight());
+        juce::Rectangle<int> r3((int)(crestFactorArea.getX() + colWidth * 2), crestFactorArea.getY(), (int)colWidth, crestFactorArea.getHeight());
+        
+        drawCrestBar(r1, "LOW DYNAMICS", newLowCF, 10.0f, 14.0f);
+        drawCrestBar(r2, "MID DYNAMICS", newMidCF, 10.0f, 15.0f);
+        drawCrestBar(r3, "HI DYNAMICS", newHiCF, 12.0f, 18.0f);
+    }
+    
     // 6. Draw LUFS Meters
     // (Removed background fill to leave it transparent)
     
@@ -975,6 +1145,17 @@ void MondoEqRefAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& even
     maxDecibels = juce::jmin(maxDecibels, 24.0f);
     if (maxDecibels - minDecibels < 10.0f)
         maxDecibels = minDecibels + 10.0f;
+}
+
+void MondoEqRefAudioProcessorEditor::mouseDoubleClick(const juce::MouseEvent& event)
+{
+    auto plotArea = getLocalBounds().withTrimmedLeft(40).withTrimmedRight(100).withTrimmedTop(40).withTrimmedRight(40).withTrimmedBottom(20);
+    if (plotArea.contains(event.getPosition()))
+    {
+        minDecibels = -100.0f;
+        maxDecibels = 0.0f;
+        repaint();
+    }
 }
 
 void MondoEqRefAudioProcessorEditor::mouseDown(const juce::MouseEvent& event)

@@ -22,6 +22,7 @@ public:
     
     // Mouse Events for Vertical Zoom/Pan
     void mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) override;
+    void mouseDoubleClick(const juce::MouseEvent& event) override;
     void mouseDrag(const juce::MouseEvent& event) override;
     void mouseDown(const juce::MouseEvent& event) override;
     void mouseUp(const juce::MouseEvent& event) override;
@@ -68,15 +69,21 @@ private:
     int currentFftOrder = 11; // 2^11 = 2048
     int currentFftSize = 2048;
     std::unique_ptr<juce::dsp::FFT> forwardFFT;
-    std::unique_ptr<juce::dsp::WindowingFunction<float>> window;
+    std::unique_ptr<juce::dsp::WindowingFunction<float>> windowHann;
+    std::unique_ptr<juce::dsp::WindowingFunction<float>> windowBH;
 
     std::vector<float> fifo;
     std::vector<float> fftData;
     int fifoIndex = 0;
     bool nextFFTBlockReady = false;
-    std::vector<float> scopeData;
-    std::vector<float> representativeCurve; // Average Curve
-    std::vector<float> sumCurve;
+    std::vector<float> scopeData; // For BH
+    std::vector<float> representativeCurve; // For BH (Average)
+    std::vector<float> sumCurve; // For BH
+    std::vector<float> maxPeakCurve; // For BH (True Peak Hold)
+
+    std::vector<float> scopeDataHann;
+    std::vector<float> representativeCurveHann;
+    std::vector<float> sumCurveHann;
     int validFrameCount = 0;
     bool isStemRefActive = false;
     std::vector<float> stemRefAvgCurve;
