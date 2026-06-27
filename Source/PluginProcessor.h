@@ -61,10 +61,7 @@ public:
         lufsSumSquares = 0.0;
         lufsSampleCount = 0;
         shortTermSumSquares = 0.0;
-        shortTermSampleCount = 0;
     }
-    
-    std::atomic<bool> triggerReset{false};
     
     float getIntegratedLufs() const {
         int64_t count = lufsSampleCount.load();

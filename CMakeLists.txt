@@ -26,7 +26,6 @@ juce_add_plugin(MondoEqRef
     PRODUCT_NAME "MondoEqRef"
     ICON_BIG icon.png
     ICON_SMALL icon.png
-    NEEDS_MIDI_INPUT TRUE
 )
 
 juce_generate_juce_header(MondoEqRef)

@@ -130,21 +130,6 @@ void MondoEqRefAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         juce::Logger::writeToLog("processBlock - input channels: " + juce::String(totalNumInputChannels) + " buffer channels: " + juce::String(buffer.getNumChannels()));
     }
 
-    // Check for parameter changes from Helix via MIDI
-    for (const auto metadata : midiMessages)
-    {
-        auto msg = metadata.getMessage();
-        
-        // Log all non-clock/active-sense messages for debugging
-        if (!msg.isActiveSense() && !msg.isMidiClock()) {
-            juce::Logger::writeToLog("MIDI IN: " + msg.getDescription());
-            
-            if (msg.isController() || msg.isProgramChange() || msg.isSysEx()) {
-                triggerReset.store(true);
-            }
-        }
-    }
-
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)

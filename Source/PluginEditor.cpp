@@ -300,17 +300,6 @@ void MondoEqRefAudioProcessorEditor::updateFftSize()
 
 void MondoEqRefAudioProcessorEditor::timerCallback()
 {
-    if (audioProcessor.triggerReset.exchange(false)) {
-        audioProcessor.resetLufs();
-        std::fill(scopeData.begin(), scopeData.end(), 0.0f);
-        std::fill(scopeDataHann.begin(), scopeDataHann.end(), 0.0f);
-        std::fill(maxPeakCurve.begin(), maxPeakCurve.end(), -100.0f); // or 0.0f depending on type, it's linear so 0.0f
-        std::fill(maxPeakCurve.begin(), maxPeakCurve.end(), 0.0f);
-        std::fill(sumCurve.begin(), sumCurve.end(), 0.0f);
-        std::fill(sumCurveHann.begin(), sumCurveHann.end(), 0.0f);
-        validFrameCount = 0;
-    }
-
     int procFifoCount = audioProcessor.fifoIndex.load();
     if (procFifoCount > 0)
     {
