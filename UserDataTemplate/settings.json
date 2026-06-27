@@ -1,0 +1,27 @@
+{
+    "auto_reset": {
+        "threshold": -95,
+        "enabled": true,
+        "wait_ms": 500
+    },
+    "dynamics_meter": {
+        "band_low": {
+            "hz_min": 60,
+            "hz_max": 300,
+            "db_min": 10,
+            "db_max": 14
+        },
+        "band_mid": {
+            "hz_min": 301,
+            "hz_max": 1999,
+            "db_min": 10,
+            "db_max": 15
+        },
+        "band_high": {
+            "hz_min": 2000,
+            "hz_max": 5000,
+            "db_min": 12,
+            "db_max": 18
+        }
+    }
+}

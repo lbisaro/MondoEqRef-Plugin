@@ -1,0 +1,57 @@
+{
+  "profiles": [
+    {
+      "deviceName": "Speakers (Realtek(R) Audio)",
+      "sampleRate": 48000.0,
+      "bufferSize": 480,
+      "processedInputChannel": 0,
+      "diInputChannel": 1,
+      "outputChannel": 0,
+      "activeInputChannels": "",
+      "activeOutputChannels": "",
+      "activeMidiInputs": [],
+      "defaultMidiOutput": ""
+    },
+    {
+      "deviceName": "ASIO4ALL v2",
+      "sampleRate": 48000.0,
+      "bufferSize": 256,
+      "processedInputChannel": 0,
+      "diInputChannel": 6,
+      "outputChannel": 2,
+      "activeInputChannels": "11111111",
+      "activeOutputChannels": "11111111",
+      "activeMidiInputs": [
+        "\\\\?\\usb#vid_0e41&pid_424a&mi_01#6&e55ecdc&3&0001#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\\midicapture"
+      ],
+      "defaultMidiOutput": "\\\\?\\usb#vid_0e41&pid_424a&mi_01#6&e55ecdc&3&0001#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\\midirender"
+    },
+    {
+      "deviceName": "ASIO Helix",
+      "sampleRate": 48000.0,
+      "bufferSize": 256,
+      "processedInputChannel": 0,
+      "diInputChannel": 6,
+      "outputChannel": 2,
+      "activeInputChannels": "11111111",
+      "activeOutputChannels": "11111111",
+      "activeMidiInputs": [
+        "\\\\?\\usb#vid_0e41&pid_424a&mi_01#6&e55ecdc&3&0001#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\\midicapture"
+      ],
+      "defaultMidiOutput": "\\\\?\\usb#vid_0e41&pid_424a&mi_01#6&e55ecdc&3&0001#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\\midirender"
+    },
+    {
+      "deviceName": "Headphones (Realtek(R) Audio)",
+      "sampleRate": 48000.0,
+      "bufferSize": 480,
+      "processedInputChannel": 0,
+      "diInputChannel": 0,
+      "outputChannel": 0,
+      "activeInputChannels": "",
+      "activeOutputChannels": "",
+      "activeMidiInputs": [],
+      "defaultMidiOutput": ""
+    }
+  ],
+  "lastUsedDevice": "ASIO Helix"
+}

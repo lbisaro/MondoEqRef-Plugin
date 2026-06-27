@@ -41,7 +41,25 @@ private:
     void drawNextFrameOfSpectrum();
     void drawFrame(juce::Graphics& g);
     void loadTargets();
+    void loadSettings();
     void targetRoleChanged();
+
+    struct DynamicsBand {
+        float hz_min = 0.0f;
+        float hz_max = 0.0f;
+        float db_min = 0.0f;
+        float db_max = 0.0f;
+    };
+    
+    struct AppSettings {
+        float autoResetThreshold = -100.0f;
+        bool autoResetEnabled = true;
+        int autoResetWaitMs = 2000;
+        DynamicsBand bandLow { 80.0f, 300.0f, 10.0f, 14.0f };
+        DynamicsBand bandMid { 300.0f, 2000.0f, 10.0f, 15.0f };
+        DynamicsBand bandHigh { 2000.0f, 5000.0f, 12.0f, 18.0f };
+    };
+    AppSettings appSettings;
 
     struct PresetPoint { float f; float target; float maxLimit; float minLimit; };
     struct PresetBand { float minFreq; float maxFreq; juce::String name; juce::String tip; juce::Colour color; };
@@ -60,8 +78,11 @@ private:
     juce::TextButton reloadTargetsButton;
 
     juce::TextButton resetButton;
+    juce::ToggleButton autoResetButton { "Auto" };
     juce::ToggleButton tiltButton { "Tilt +4.5dB/Oct" };
     juce::Slider targetOffsetSlider { juce::Slider::LinearVertical, juce::Slider::TextBoxBelow };
+    
+    uint32_t lastSignalTime = 0;
     
     bool isTiltEnabled = true;
     float currentTargetOffset = 0.0f;

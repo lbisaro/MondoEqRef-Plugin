@@ -4,7 +4,7 @@
 MondoEqRefAudioProcessorEditor::MondoEqRefAudioProcessorEditor (MondoEqRefAudioProcessor& p)
     : AudioProcessorEditor (&p), audioProcessor (p)
 {
-    setSize (940, 450);
+    setSize (1040, 450);
 
     fftSizeLabel.setText("FFT Size:", juce::dontSendNotification);
     fftSizeLabel.setColour(juce::Label::textColourId, juce::Colours::white);
@@ -28,6 +28,7 @@ MondoEqRefAudioProcessorEditor::MondoEqRefAudioProcessorEditor (MondoEqRefAudioP
     reloadTargetsButton.setButtonText("Refresh");
     reloadTargetsButton.onClick = [this]() {
         int currentId = targetRoleBox.getSelectedId();
+        loadSettings();
         loadTargets();
         targetRoleBox.setSelectedId(currentId, juce::dontSendNotification);
         targetRoleChanged();
@@ -49,6 +50,9 @@ MondoEqRefAudioProcessorEditor::MondoEqRefAudioProcessorEditor (MondoEqRefAudioP
     };
     addAndMakeVisible(resetButton);
 
+    autoResetButton.setToggleState(false, juce::dontSendNotification);
+    addAndMakeVisible(autoResetButton);
+
     tiltButton.setToggleState(true, juce::dontSendNotification);
     tiltButton.onClick = [this] {
         isTiltEnabled = tiltButton.getToggleState();
@@ -69,6 +73,7 @@ MondoEqRefAudioProcessorEditor::MondoEqRefAudioProcessorEditor (MondoEqRefAudioP
     setResizable(true, true);
 
     updateFftSize();
+    loadSettings();
     loadTargets();
 
     startTimerHz(60);
@@ -372,9 +377,28 @@ void MondoEqRefAudioProcessorEditor::drawNextFrameOfSpectrum()
         }
     }
     
-    // Almacenamos el maxMag en una variable de la clase o lo imprimimos de otra forma
-    // para que la GUI lo muestre. Para no tocar .h, vamos a confiar en que llegue al log si lo forzamos.
-    juce::Logger::writeToLog("FFT Drawn! MaxMag: " + juce::String(maxMag));
+    // Auto Reset logic
+    float silenceThreshold = juce::Decibels::decibelsToGain(appSettings.autoResetThreshold);
+    if (maxMag > silenceThreshold)
+    {
+        lastSignalTime = juce::Time::getMillisecondCounter();
+    }
+    else if (autoResetButton.getToggleState() && validFrameCount > 0)
+    {
+        if (juce::Time::getMillisecondCounter() - lastSignalTime > (uint32_t)appSettings.autoResetWaitMs)
+        {
+            std::fill(representativeCurve.begin(), representativeCurve.end(), 0.0f);
+            std::fill(sumCurve.begin(), sumCurve.end(), 0.0f);
+            std::fill(representativeCurveHann.begin(), representativeCurveHann.end(), 0.0f);
+            std::fill(sumCurveHann.begin(), sumCurveHann.end(), 0.0f);
+            std::fill(maxPeakCurve.begin(), maxPeakCurve.end(), 0.0f);
+            std::fill(scopeData.begin(), scopeData.end(), 0.0f);
+            std::fill(scopeDataHann.begin(), scopeDataHann.end(), 0.0f);
+            validFrameCount = 0;
+            audioProcessor.resetLufs();
+            lastSignalTime = juce::Time::getMillisecondCounter(); // Prevent continuous resetting
+        }
+    }
 }
 
 void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
@@ -987,9 +1011,9 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
             return count > 0 ? (totalGap / (float)count) : 0.0f;
         };
         
-        newLowCF = calcCrestFactor(80.0f, 300.0f);
-        newMidCF = calcCrestFactor(300.0f, 2000.0f);
-        newHiCF = calcCrestFactor(2000.0f, 5000.0f);
+        newLowCF = calcCrestFactor(appSettings.bandLow.hz_min, appSettings.bandLow.hz_max);
+        newMidCF = calcCrestFactor(appSettings.bandMid.hz_min, appSettings.bandMid.hz_max);
+        newHiCF = calcCrestFactor(appSettings.bandHigh.hz_min, appSettings.bandHigh.hz_max);
     }
     
     if (validFrameCount > 0)
@@ -1028,9 +1052,9 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
         juce::Rectangle<int> r2((int)(crestFactorArea.getX() + colWidth), crestFactorArea.getY(), (int)colWidth, crestFactorArea.getHeight());
         juce::Rectangle<int> r3((int)(crestFactorArea.getX() + colWidth * 2), crestFactorArea.getY(), (int)colWidth, crestFactorArea.getHeight());
         
-        drawCrestBar(r1, "LOW DYNAMICS", newLowCF, 10.0f, 14.0f);
-        drawCrestBar(r2, "MID DYNAMICS", newMidCF, 10.0f, 15.0f);
-        drawCrestBar(r3, "HI DYNAMICS", newHiCF, 12.0f, 18.0f);
+        drawCrestBar(r1, "LOW DYNAMICS", newLowCF, appSettings.bandLow.db_min, appSettings.bandLow.db_max);
+        drawCrestBar(r2, "MID DYNAMICS", newMidCF, appSettings.bandMid.db_min, appSettings.bandMid.db_max);
+        drawCrestBar(r3, "HI DYNAMICS", newHiCF, appSettings.bandHigh.db_min, appSettings.bandHigh.db_max);
     }
     
     // 6. Draw LUFS Meters
@@ -1103,6 +1127,67 @@ void MondoEqRefAudioProcessorEditor::paint (juce::Graphics& g)
     drawMeter(stMeterArea, stLufs, "ST", false);
 }
 
+void MondoEqRefAudioProcessorEditor::loadSettings()
+{
+    juce::File dataFile;
+#if JUCE_WINDOWS
+    dataFile = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+        .getParentDirectory().getChildFile("Local").getChildFile("MondoEqRef").getChildFile("settings.json");
+#else
+    dataFile = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+        .getChildFile("MondoEqRef").getChildFile("settings.json");
+#endif
+
+    if (dataFile.existsAsFile())
+    {
+        auto parsedJson = juce::JSON::parse(dataFile);
+        if (parsedJson.isObject())
+        {
+            auto* obj = parsedJson.getDynamicObject();
+            
+            if (obj->hasProperty("auto_reset"))
+            {
+                auto autoResetProp = obj->getProperty("auto_reset");
+                if (autoResetProp.isObject())
+                {
+                    auto* arObj = autoResetProp.getDynamicObject();
+                    if (arObj->hasProperty("threshold")) appSettings.autoResetThreshold = float(arObj->getProperty("threshold"));
+                    if (arObj->hasProperty("enabled")) appSettings.autoResetEnabled = bool(arObj->getProperty("enabled"));
+                    if (arObj->hasProperty("wait_ms")) appSettings.autoResetWaitMs = int(arObj->getProperty("wait_ms"));
+                    
+                    autoResetButton.setToggleState(appSettings.autoResetEnabled, juce::dontSendNotification);
+                }
+            }
+            
+            if (obj->hasProperty("dynamics_meter"))
+            {
+                auto dynamicsProp = obj->getProperty("dynamics_meter");
+                if (dynamicsProp.isObject())
+                {
+                    auto* dynObj = dynamicsProp.getDynamicObject();
+                    
+                    auto parseBand = [](juce::DynamicObject* parent, const juce::String& bandName, DynamicsBand& band) {
+                        if (parent->hasProperty(bandName)) {
+                            auto bandProp = parent->getProperty(bandName);
+                            if (bandProp.isObject()) {
+                                auto* bObj = bandProp.getDynamicObject();
+                                if (bObj->hasProperty("hz_min")) band.hz_min = float(bObj->getProperty("hz_min"));
+                                if (bObj->hasProperty("hz_max")) band.hz_max = float(bObj->getProperty("hz_max"));
+                                if (bObj->hasProperty("db_min")) band.db_min = float(bObj->getProperty("db_min"));
+                                if (bObj->hasProperty("db_max")) band.db_max = float(bObj->getProperty("db_max"));
+                            }
+                        }
+                    };
+                    
+                    parseBand(dynObj, "band_low", appSettings.bandLow);
+                    parseBand(dynObj, "band_mid", appSettings.bandMid);
+                    parseBand(dynObj, "band_high", appSettings.bandHigh);
+                }
+            }
+        }
+    }
+}
+
 void MondoEqRefAudioProcessorEditor::resized()
 {
     fftSizeLabel.setBounds(10, 5, 80, 20);
@@ -1110,9 +1195,10 @@ void MondoEqRefAudioProcessorEditor::resized()
 
     targetRoleLabel.setBounds(fftSizeBox.getRight() + 20, 5, 50, 20);
     targetRoleBox.setBounds(targetRoleLabel.getRight() + 5, 5, 200, 20);
-    reloadTargetsButton.setBounds(targetRoleBox.getRight() + 5, 5, 60, 20);
-    resetButton.setBounds(reloadTargetsButton.getRight() + 20, 5, 100, 20);
-    tiltButton.setBounds(resetButton.getRight() + 20, 5, 120, 20);
+    resetButton.setBounds(targetRoleBox.getRight() + 20, 5, 80, 20);
+    autoResetButton.setBounds(resetButton.getRight() + 5, 5, 50, 20);
+    tiltButton.setBounds(autoResetButton.getRight() + 20, 5, 120, 20);
+    reloadTargetsButton.setBounds(tiltButton.getRight() + 20, 5, 80, 20);
     
     // Position targetOffsetSlider vertically on the left
     auto fullArea = getLocalBounds();
