@@ -6,6 +6,7 @@
 #include "Views/CustomAudioSettings.h"
 #include "Views/GuitarDIView.h"
 #include "Views/StemsView.h"
+#include "Views/SpectralRefView.h"
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -74,11 +75,13 @@ private:
   juce::TextButton navAnalyzeButton{"Analyze"};
   juce::TextButton navGuitarDIButton{"Guitar DI"};
   juce::TextButton navStemsButton{"Stems"};
+  juce::TextButton navSpectralRefButton{"Spectral Ref"};
 
   // Views
   AnalyzeView analyzeView{processor};
   GuitarDIView guitarDIView;
   StemsView stemsView;
+  SpectralRefView spectralRefView;
 
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };

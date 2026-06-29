@@ -12,14 +12,17 @@ MainComponent::MainComponent()
     addAndMakeVisible(navAnalyzeButton);
     addAndMakeVisible(navGuitarDIButton);
     addAndMakeVisible(navStemsButton);
+    addAndMakeVisible(navSpectralRefButton);
 
     navAnalyzeButton.setClickingTogglesState(true);
     navGuitarDIButton.setClickingTogglesState(true);
     navStemsButton.setClickingTogglesState(true);
+    navSpectralRefButton.setClickingTogglesState(true);
 
     navAnalyzeButton.setRadioGroupId(1);
     navGuitarDIButton.setRadioGroupId(1);
     navStemsButton.setRadioGroupId(1);
+    navSpectralRefButton.setRadioGroupId(1);
 
     auto showView = [this](int viewIndex) {
         if (viewIndex != 0 && analyzeView.getIsPlaying()) {
@@ -29,14 +32,17 @@ MainComponent::MainComponent()
         analyzeView.setVisible(viewIndex == 0);
         guitarDIView.setVisible(viewIndex == 1);
         stemsView.setVisible(viewIndex == 2);
+        spectralRefView.setVisible(viewIndex == 3);
         
         if (viewIndex == 0) analyzeView.grabKeyboardFocus();
         else if (viewIndex == 1) guitarDIView.grabKeyboardFocus();
+        else if (viewIndex == 3) spectralRefView.grabKeyboardFocus();
         
         // Update nav button toggles to match
         if (viewIndex == 0) navAnalyzeButton.setToggleState(true, juce::dontSendNotification);
         if (viewIndex == 1) navGuitarDIButton.setToggleState(true, juce::dontSendNotification);
         if (viewIndex == 2) navStemsButton.setToggleState(true, juce::dontSendNotification);
+        if (viewIndex == 3) navSpectralRefButton.setToggleState(true, juce::dontSendNotification);
     };
 
     analyzeView.onRequestTabChange = showView;
@@ -44,11 +50,13 @@ MainComponent::MainComponent()
     navAnalyzeButton.onClick = [showView] { showView(0); };
     navGuitarDIButton.onClick = [showView] { showView(1); };
     navStemsButton.onClick = [showView] { showView(2); };
+    navSpectralRefButton.onClick = [showView] { showView(3); };
 
     // Add views
     addChildComponent(analyzeView);
     addChildComponent(guitarDIView);
     addChildComponent(stemsView);
+    addChildComponent(spectralRefView);
 
     // Stem Setup
     formatManager.registerBasicFormats();
@@ -525,11 +533,14 @@ void MainComponent::resized()
     navGuitarDIButton.setBounds(navArea.removeFromLeft(100));
     navArea.removeFromLeft(5); // spacing
     navStemsButton.setBounds(navArea.removeFromLeft(100));
+    navArea.removeFromLeft(5); // spacing
+    navSpectralRefButton.setBounds(navArea.removeFromLeft(100));
     
     // Main View
     analyzeView.setBounds(bounds);
     guitarDIView.setBounds(bounds);
     stemsView.setBounds(bounds);
+    spectralRefView.setBounds(bounds);
 }
 
 void MainComponent::loadDiFile(const juce::File& file)
