@@ -25,6 +25,7 @@ MainComponent::MainComponent()
     navSpectralRefButton.setRadioGroupId(1);
 
     auto showView = [this](int viewIndex) {
+        currentViewIndex = viewIndex;
         if (viewIndex != 0 && analyzeView.getIsPlaying()) {
             analyzeView.setIsPlaying(false); // Forzar stop si salimos de la pestaña
         }
@@ -170,6 +171,7 @@ MainComponent::~MainComponent()
     deviceManager.removeAudioCallback(&audioSourcePlayer);
     audioSourcePlayer.setSource(nullptr);
     deviceManager.removeChangeListener(this);
+    deviceManager.closeAudioDevice();
 }
 
 void MainComponent::applyProfileToDeviceManager(const DeviceAudioProfile& profile)
@@ -257,6 +259,9 @@ void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate
     // Fix: Asegurar que el AudioProcessor base conozca el sample rate
     processor.setRateAndBufferSizeDetails(sampleRate, samplesPerBlockExpected);
     processor.prepareToPlay(sampleRate, samplesPerBlockExpected);
+
+    spectralProcessor.setRateAndBufferSizeDetails(sampleRate, samplesPerBlockExpected);
+    spectralProcessor.prepareToPlay(sampleRate, samplesPerBlockExpected);
     
     if (stemTransportSource != nullptr)
         stemTransportSource->prepareToPlay(samplesPerBlockExpected, sampleRate);
@@ -352,6 +357,37 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
 
     // --- ALWAYS PROCESS DI METERS AND RECORDING, EVEN IF NOT PLAYING ---    // -------------------------------------------------------------------
 
+    juce::MidiBuffer midi;
+
+    if (currentViewIndex == 3)
+    {
+        juce::AudioBuffer<float> spectralBuffer(2, bufferToFill.numSamples);
+        spectralBuffer.clear();
+
+        // 1. LEER EL RETURN (del hardware)
+        if (denseProcessedCh >= 0 && denseProcessedCh < bufferToFill.buffer->getNumChannels())
+        {
+            spectralBuffer.copyFrom(0, 0, *bufferToFill.buffer, denseProcessedCh, bufferToFill.startSample, bufferToFill.numSamples);
+        }
+
+        // Limpiar el buffer físico principal para que el ruido no salga por los monitores principales
+        bufferToFill.clearActiveBufferRegion();
+
+        // 2. PROCESAR (calcula FFT y genera ruido en spectralBuffer)
+        spectralProcessor.processBlock(spectralBuffer, midi);
+
+        // 3. ENVIAR EL RUIDO (al hardware)
+        if (denseOutCh >= 0 && denseOutCh < bufferToFill.buffer->getNumChannels())
+        {
+            bufferToFill.buffer->addFrom(denseOutCh, bufferToFill.startSample, spectralBuffer, 0, 0, spectralBuffer.getNumSamples());
+            // Opcional: si la salida es un par estéreo, enviamos por el derecho también
+            if (denseOutCh + 1 < bufferToFill.buffer->getNumChannels())
+                bufferToFill.buffer->addFrom(denseOutCh + 1, bufferToFill.startSample, spectralBuffer, 1, 0, spectralBuffer.getNumSamples());
+        }
+
+        return;
+    }
+
     if (!analyzeView.getIsPlaying()) 
     {
         bufferToFill.clearActiveBufferRegion();
@@ -360,8 +396,7 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
 
     juce::AudioBuffer<float> eqInput (2, bufferToFill.numSamples);
     eqInput.clear();
-    juce::MidiBuffer midi;
-
+    
     if (shouldLog)
     {
         DBG("trackMode: " << trackMode << " denseProcessedCh: " << denseProcessedCh << " denseDiCh: " << denseDiCh 

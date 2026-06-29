@@ -7,6 +7,7 @@
 #include "Views/GuitarDIView.h"
 #include "Views/StemsView.h"
 #include "Views/SpectralRefView.h"
+#include "../SpectralRef/MondoSpectralRefProcessor.h"
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -37,6 +38,7 @@ private:
   void populateChannelSelectors();
 
   MondoEqRefAudioProcessor processor;
+  MondoSpectralRefAudioProcessor spectralProcessor;
 
   DeviceRoutingManager routingManager;
   juce::AudioDeviceManager deviceManager;
@@ -58,6 +60,8 @@ private:
   juce::AudioBuffer<float> diRecordBuffer;
   std::atomic<int> diRecordSampleCount { 0 };
   double currentSampleRate = 44100.0;
+  
+  int currentViewIndex = 0;
 
   void loadStemFile(const juce::File &file);
   void loadDiFile(const juce::File &file);
@@ -81,7 +85,7 @@ private:
   AnalyzeView analyzeView{processor};
   GuitarDIView guitarDIView;
   StemsView stemsView;
-  SpectralRefView spectralRefView;
+  SpectralRefView spectralRefView{spectralProcessor};
 
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
