@@ -168,6 +168,9 @@ MainComponent::~MainComponent()
     stopTimer();
     stopRecordingDI("");
 
+    if (stemTransportSource != nullptr) stemTransportSource->stop();
+    if (diTransportSource != nullptr) diTransportSource->stop();
+
     deviceManager.removeAudioCallback(&audioSourcePlayer);
     audioSourcePlayer.setSource(nullptr);
     deviceManager.removeChangeListener(this);

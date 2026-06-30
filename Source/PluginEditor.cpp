@@ -368,9 +368,11 @@ void MondoEqRefAudioProcessorEditor::drawNextFrameOfSpectrum() {
     scopeDataHann[i] = scopeDataHann[i] * 0.8f + magnitudeHann * 0.2f;
   }
 
-  // Noise Gate: only include frame in average if signal is detected (> -80dB
-  // approx)
-  if (maxMag > 0.0001f) {
+  float silenceThreshold =
+      juce::Decibels::decibelsToGain(appSettings.autoResetThreshold);
+
+  // Noise Gate: only include frame in average if signal is detected
+  if (maxMag > silenceThreshold) {
     validFrameCount++;
     for (int i = 0; i < currentFftSize / 2; ++i) {
       sumCurve[i] += scopeData[i];
@@ -380,12 +382,6 @@ void MondoEqRefAudioProcessorEditor::drawNextFrameOfSpectrum() {
       sumCurveHann[i] += scopeDataHann[i];
       representativeCurveHann[i] = sumCurveHann[i] / (float)validFrameCount;
     }
-  }
-
-  // Auto Reset logic
-  float silenceThreshold =
-      juce::Decibels::decibelsToGain(appSettings.autoResetThreshold);
-  if (maxMag > silenceThreshold) {
     lastSignalTime = juce::Time::getMillisecondCounter();
   } else if (autoResetButton.getToggleState() && validFrameCount > 0) {
     if (juce::Time::getMillisecondCounter() - lastSignalTime >
@@ -425,6 +421,10 @@ void MondoEqRefAudioProcessorEditor::paint(juce::Graphics &g) {
   float bottom = (float)plotArea.getBottom();
   float width = (float)plotArea.getWidth();
   float height = (float)plotArea.getHeight();
+
+  // Prepare clipping region to avoid drawing over the UI
+  g.saveState();
+  g.reduceClipRegion(plotArea);
 
   float minFreq = 20.0f;
   float maxFreq = 20000.0f;
@@ -745,6 +745,8 @@ void MondoEqRefAudioProcessorEditor::paint(juce::Graphics &g) {
     g.strokePath(minPath, juce::PathStrokeType(1.0f));
   }
 
+  g.restoreState();
+
   // 2. Draw Grids
   g.setColour(juce::Colours::white.withAlpha(0.1f));
 
@@ -794,7 +796,10 @@ void MondoEqRefAudioProcessorEditor::paint(juce::Graphics &g) {
     g.setColour(juce::Colours::white.withAlpha(0.1f));
   }
 
-  // 3. Draw Curves
+  // 3. Draw Live Spectrum
+  g.saveState();
+  g.reduceClipRegion(plotArea);
+
   juce::Path spectrumPath;
   juce::Path peakPath; // Average path
   juce::Path hannPath;
@@ -1033,11 +1038,13 @@ void MondoEqRefAudioProcessorEditor::paint(juce::Graphics &g) {
     g.setColour(juce::Colour::fromString("ff252526").withAlpha(0.9f));
     g.fillRect(textX, textY, textWidth, 22);
 
-    g.setColour(juce::Colours::cyan);
+    g.setColour(isMeasuring ? juce::Colours::orange : juce::Colours::cyan);
     g.setFont(12.0f);
     g.drawText(text, textX, textY, textWidth, 22, juce::Justification::centred,
                false);
   }
+  
+  g.restoreState();
 
   // 5. Draw Crest Factor Metrics at the top
   float newLowCF = 0.0f;
@@ -1106,21 +1113,29 @@ void MondoEqRefAudioProcessorEditor::paint(juce::Graphics &g) {
                  area.removeFromTop(15), juce::Justification::centred, false);
 
       auto barArea = area.reduced(10, 4);
-      g.setColour(juce::Colours::darkgrey);
-      g.fillRect(barArea);
+      g.setColour(juce::Colour::fromString("ff1a1a1c"));
+      g.fillRoundedRectangle(barArea.toFloat(), 4.0f);
 
-      // Map 0-25dB to 0-100% width
-      float fillWidth =
-          juce::jmap(cf, 0.0f, 25.0f, 0.0f, (float)barArea.getWidth());
-      fillWidth = juce::jlimit(0.0f, (float)barArea.getWidth(), fillWidth);
+      auto mapToX = [&](float val) {
+          float mapped = juce::jmap(val, 0.0f, 25.0f, 0.0f, (float)barArea.getWidth());
+          return barArea.getX() + juce::jlimit(0.0f, (float)barArea.getWidth(), mapped);
+      };
 
-      juce::Colour fillColour = juce::Colours::yellow;
-      if (cf >= minTarget && cf <= maxTarget) {
-        fillColour = juce::Colours::lightgreen;
+      float xMin = mapToX(minTarget);
+      float xMax = mapToX(maxTarget);
+      float xCf = mapToX(cf);
+
+      bool inRange = (cf >= minTarget && cf <= maxTarget);
+      juce::Colour rangeColor = inRange ? juce::Colours::lightgreen : juce::Colours::lightyellow;
+
+      if (xMax > xMin) {
+          juce::Rectangle<float> rangeRect(xMin, (float)barArea.getY() + 1.0f, xMax - xMin, (float)barArea.getHeight() - 2.0f);
+          g.setColour(rangeColor.withAlpha(0.8f));
+          g.fillRoundedRectangle(rangeRect, 3.0f);
       }
 
-      g.setColour(fillColour.withAlpha(0.8f));
-      g.fillRect(barArea.withWidth((int)fillWidth));
+      g.setColour(juce::Colours::white);
+      g.fillRect(xCf - 1.0f, (float)barArea.getY(), 2.0f, (float)barArea.getHeight());
     };
 
     juce::Rectangle<int> r1(crestFactorArea.getX(), crestFactorArea.getY(),
@@ -1409,6 +1424,8 @@ void MondoEqRefAudioProcessorEditor::mouseUp(const juce::MouseEvent &event) {
     }
     repaint();
   }
+  
+  isDragging = false;
 }
 
 void MondoEqRefAudioProcessorEditor::mouseMove(const juce::MouseEvent &event) {

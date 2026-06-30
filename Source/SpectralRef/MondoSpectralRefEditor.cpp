@@ -21,15 +21,19 @@ void MondoSpectralRefEditor::timerCallback()
     audioProcessor.calculateTransferFunction();
     
     if (audioProcessor.isNormalized.load()) {
-        normalizeButton.setColour(juce::TextButton::buttonColourId, juce::Colours::orange.withAlpha(0.6f));
+        normalizeButton.setColour(juce::TextButton::buttonColourId, juce::Colours::orange);
+        normalizeButton.setColour(juce::TextButton::textColourOffId, juce::Colours::black);
     } else {
         normalizeButton.removeColour(juce::TextButton::buttonColourId);
+        normalizeButton.removeColour(juce::TextButton::textColourOffId);
     }
     
     if (isZoomedHz) {
-        zoomHzButton.setColour(juce::TextButton::buttonColourId, juce::Colours::orange.withAlpha(0.6f));
+        zoomHzButton.setColour(juce::TextButton::buttonColourId, juce::Colours::orange);
+        zoomHzButton.setColour(juce::TextButton::textColourOffId, juce::Colours::black);
     } else {
         zoomHzButton.removeColour(juce::TextButton::buttonColourId);
+        zoomHzButton.removeColour(juce::TextButton::textColourOffId);
     }
     
     repaint();
@@ -251,7 +255,7 @@ void MondoSpectralRefEditor::paint(juce::Graphics &g) {
     g.setColour(juce::Colour::fromString("ff252526").withAlpha(0.9f));
     g.fillRect(textX, textY, textWidth, 22);
 
-    g.setColour(juce::Colours::orange);
+    g.setColour(isMeasuring ? juce::Colours::orange : juce::Colours::cyan);
     g.setFont(12.0f);
     g.drawText(text, textX, textY, textWidth, 22, juce::Justification::centred,
                false);
