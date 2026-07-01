@@ -1,0 +1,37 @@
+[
+    {
+        "name": "1. Corte de Graves (F3)",
+        "min": 70,
+        "max": 100,
+        "color": "88888888",
+        "tip": "La frecuencia donde el parlante empieza a atenuar severamente los graves. Define si el tono es \"bola\" o limpio en bajas frecuencias."
+    },
+    {
+        "name": "2. Resonancia de Graves",
+        "min": 120,
+        "max": 180,
+        "color": "88888888",
+        "tip": "El \"pico\" de ganancia donde la caja física resuena. Da el empuje (chug) en las cuerdas graves."
+    },
+    {
+        "name": "3. El Valle de Medios (Scoop)",
+        "min": 400,
+        "max": 700,
+        "color": "88888888",
+        "tip": "El punto más bajo de la curva. Define la identidad del amplificador/caja (un bache profundo es más Fender; un bache más alto y plano es más Marshall)."
+    },
+    {
+        "name": "4. Pico de Presencia",
+        "min": 2000,
+        "max": 3500,
+        "color": "88888888",
+        "tip": "La zona donde el parlante tiene mayor eficiencia. Define la claridad del solo, el \"ataque\" y qué tan al frente suena la guitarra."
+    },
+    {
+        "name": "5. Corte de Agudos (F3 Alto)",
+        "min": 5000,
+        "max": 7000,
+        "color": "88888888",
+        "tip": "El \"filtro pasa-bajos\" natural del parlante. A partir de aquí, la curva cae en picada, eliminando el siseo desagradable."
+    }
+]
