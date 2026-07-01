@@ -194,6 +194,106 @@
             "lufs": -22.0
         },
         {
+            "name": "GTR THROATY",
+            "bands": [
+                {
+                    "name": "Punch / Peso",
+                    "min": 100.0,
+                    "max": 250.0,
+                    "color": "ffffffff",
+                    "tip": "Cuerpo fundamental de las cuerdas graves; mantener controlado para no empastar el bajo"
+                },
+                {
+                    "name": "Garganta / Wood",
+                    "min": 350.0,
+                    "max": 800.0,
+                    "color": "ff00ff00",
+                    "tip": "Zona núcleo (Throaty). El gruñido sordo y el sonido maderoso; fundamental mantenerlo inflado"
+                },
+                {
+                    "name": "Vocal / Honk",
+                    "min": 800.0,
+                    "max": 1500.0,
+                    "color": "ff00ffff",
+                    "tip": "Carácter nasal tipo Wah semiabierto; define la articulación de la púa en las notas sueltas"
+                },
+                {
+                    "name": "Mordida / Presencia",
+                    "min": 2000.0,
+                    "max": 4000.0,
+                    "color": "ffff0000",
+                    "tip": "Claridad y ataque rítmico; vigilar que no compita agresivamente con los formantes de la voz"
+                },
+                {
+                    "name": "Filtro / Dulzura",
+                    "min": 5000.0,
+                    "max": 8000.0,
+                    "color": "ff808080",
+                    "tip": "Roll-off de agudos; debe caer rápido para emular la calidez de un mic de mango"
+                }
+            ],
+            "description": "Tono vocal y rústico con fuerte énfasis en medios-graves. Ataque percusivo de madera ideal para líneas funk robustas o solos fusion con cuerpo.",
+            "frequency_points": [
+                {
+                    "f": 20,
+                    "target": -65.0
+                },
+                {
+                    "f": 60,
+                    "target": -42.0
+                },
+                {
+                    "f": 80,
+                    "target": -32.0
+                },
+                {
+                    "f": 100,
+                    "target": -29.0
+                },
+                {
+                    "f": 150,
+                    "target": -28.5
+                },
+                {
+                    "f": 300,
+                    "target": -29.0
+                },
+                {
+                    "f": 500,
+                    "target": -30.0
+                },
+                {
+                    "f": 1000,
+                    "target": -36.5
+                },
+                {
+                    "f": 2000,
+                    "target": -46.0
+                },
+                {
+                    "f": 4000,
+                    "target": -65.0
+                },
+                {
+                    "f": 6000,
+                    "target": -79.0
+                },
+                {
+                    "f": 8000,
+                    "target": -86.0
+                },
+                {
+                    "f": 12000,
+                    "target": -98.0
+                },
+                {
+                    "f": 20000,
+                    "target": -100.0
+                }
+            ],
+            "lufs": -22.0
+        },
+        {
             "name": "GTR LEAD",
             "bands": [
                 {
