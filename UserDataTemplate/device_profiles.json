@@ -33,7 +33,7 @@
       "processedInputChannel": 0,
       "diInputChannel": 6,
       "outputChannel": 2,
-      "isDualMonoSend": false,
+      "isDualMonoSend": true,
       "activeInputChannels": "11111111",
       "activeOutputChannels": "11111111",
       "activeMidiInputs": [],
