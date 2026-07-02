@@ -7,6 +7,7 @@
       "processedInputChannel": 0,
       "diInputChannel": 1,
       "outputChannel": 0,
+      "isDualMonoSend": true,
       "activeInputChannels": "",
       "activeOutputChannels": "",
       "activeMidiInputs": [],
@@ -19,24 +20,24 @@
       "processedInputChannel": 0,
       "diInputChannel": 0,
       "outputChannel": 0,
-      "activeInputChannels": "11",
-      "activeOutputChannels": "11",
+      "isDualMonoSend": true,
+      "activeInputChannels": "11111111",
+      "activeOutputChannels": "11111111",
       "activeMidiInputs": [],
       "defaultMidiOutput": ""
     },
     {
       "deviceName": "ASIO Helix",
       "sampleRate": 48000.0,
-      "bufferSize": 256,
+      "bufferSize": 512,
       "processedInputChannel": 0,
       "diInputChannel": 6,
       "outputChannel": 2,
+      "isDualMonoSend": false,
       "activeInputChannels": "11111111",
       "activeOutputChannels": "11111111",
-      "activeMidiInputs": [
-        "\\\\?\\usb#vid_0e41&pid_424a&mi_01#6&e55ecdc&3&0001#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\\midicapture"
-      ],
-      "defaultMidiOutput": "\\\\?\\usb#vid_0e41&pid_424a&mi_01#6&e55ecdc&3&0001#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\\midirender"
+      "activeMidiInputs": [],
+      "defaultMidiOutput": ""
     },
     {
       "deviceName": "Headphones (Realtek(R) Audio)",
@@ -45,11 +46,12 @@
       "processedInputChannel": 0,
       "diInputChannel": 0,
       "outputChannel": 0,
+      "isDualMonoSend": true,
       "activeInputChannels": "",
       "activeOutputChannels": "",
       "activeMidiInputs": [],
       "defaultMidiOutput": ""
     }
   ],
-  "lastUsedDevice": "ASIO4ALL v2"
+  "lastUsedDevice": "ASIO Helix"
 }

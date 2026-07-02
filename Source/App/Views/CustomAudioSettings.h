@@ -34,6 +34,8 @@ private:
 
     juce::Label outputLabel;
     juce::ComboBox outputCombo;
+    
+    juce::ToggleButton dualMonoToggle;
 
     juce::String currentDeviceName;
 

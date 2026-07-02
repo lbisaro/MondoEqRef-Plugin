@@ -56,6 +56,7 @@ public:
     
     std::atomic<bool> isNormalized { false };
     std::atomic<bool> triggerNormalize { false };
+    std::atomic<int> analyzeChannelMode { 0 }; // 0: L+R (Avg), 1: L, 2: R
     
     float noiseLevel = 0.5f;
     juce::Random random;

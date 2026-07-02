@@ -4,11 +4,7 @@
 MondoEqRefAudioProcessorEditor::MondoEqRefAudioProcessorEditor(
     MondoEqRefAudioProcessor &p)
     : AudioProcessorEditor(&p), audioProcessor(p) {
-  setSize(1040, 450);
-
-  fftSizeLabel.setText("FFT Size:", juce::dontSendNotification);
-  fftSizeLabel.setColour(juce::Label::textColourId, juce::Colours::white);
-  addAndMakeVisible(fftSizeLabel);
+  setSize(audioProcessor.editorWidth, audioProcessor.editorHeight);
 
   fftSizeBox.addItem("1024", 1);
   fftSizeBox.addItem("2048", 2);
@@ -35,7 +31,7 @@ MondoEqRefAudioProcessorEditor::MondoEqRefAudioProcessorEditor(
   };
   addAndMakeVisible(reloadTargetsButton);
 
-  resetButton.setButtonText("Reset (R)");
+  resetButton.setButtonText("RST");
   resetButton.onClick = [this] {
     std::fill(representativeCurve.begin(), representativeCurve.end(), 0.0f);
     std::fill(sumCurve.begin(), sumCurve.end(), 0.0f);
@@ -60,6 +56,13 @@ MondoEqRefAudioProcessorEditor::MondoEqRefAudioProcessorEditor(
     repaint();
   };
   addAndMakeVisible(tiltButton);
+
+  smoothButton.setToggleState(true, juce::dontSendNotification);
+  smoothButton.onClick = [this] {
+    isSmoothingEnabled = smoothButton.getToggleState();
+    repaint();
+  };
+  addAndMakeVisible(smoothButton);
 
   targetOffsetSlider.setRange(-50.0, 50.0, 0.5);
   targetOffsetSlider.setValue(0.0, juce::dontSendNotification);
@@ -804,163 +807,218 @@ void MondoEqRefAudioProcessorEditor::paint(juce::Graphics &g) {
   juce::Path peakPath; // Average path
   juce::Path hannPath;
   juce::Path maxPeakPath; // True peak path
-  bool first = true;
-
-  std::vector<float> pixelLiveMax(juce::roundToInt(width) + 1, -100.0f);
-  std::vector<float> pixelPeakMax(juce::roundToInt(width) + 1,
-                                  -100.0f); // Average
-  std::vector<float> pixelLiveHann(juce::roundToInt(width) + 1, -100.0f);
-  std::vector<float> pixelTruePeak(juce::roundToInt(width) + 1, -100.0f);
-
-  float binFreq = (float)audioProcessor.getSampleRate() / (float)currentFftSize;
-
-  for (int i = 1; i < currentFftSize / 2; ++i) {
-    float freq = binFreq * (float)i;
-    if (freq < minFreq)
-      continue;
-    if (freq > maxFreq)
-      break;
-
-    float normFreq =
-        (std::log10(freq) - minLogFreq) / (maxLogFreq - minLogFreq);
-    float xPos = width * std::pow(normFreq, skewFactor);
-    int xPixel =
-        juce::jlimit(0, juce::roundToInt(width), juce::roundToInt(xPos));
-
-    float tilt = isTiltEnabled ? 4.5f * std::log2(freq / 1000.0f) : 0.0f;
-
-    float rawDb = juce::Decibels::gainToDecibels(scopeData[i], -100.0f);
-    float dbLevel = rawDb > -99.9f ? rawDb + tilt : -100.0f;
-
-    float rawPeakDb =
-        juce::Decibels::gainToDecibels(representativeCurve[i], -100.0f);
-    float peakDbLevel = rawPeakDb > -99.9f ? rawPeakDb + tilt : -100.0f;
-
-    float rawHannDb = juce::Decibels::gainToDecibels(scopeDataHann[i], -100.0f);
-    float hannDbLevel = rawHannDb > -99.9f ? rawHannDb + tilt : -100.0f;
-
-    float rawTruePeakDb =
-        juce::Decibels::gainToDecibels(maxPeakCurve[i], -100.0f);
-    float truePeakDbLevel =
-        rawTruePeakDb > -99.9f ? rawTruePeakDb + tilt : -100.0f;
-
-    pixelLiveMax[xPixel] = juce::jmax(pixelLiveMax[xPixel], dbLevel);
-    pixelPeakMax[xPixel] = juce::jmax(pixelPeakMax[xPixel], peakDbLevel);
-    pixelLiveHann[xPixel] = juce::jmax(pixelLiveHann[xPixel], hannDbLevel);
-    pixelTruePeak[xPixel] = juce::jmax(pixelTruePeak[xPixel], truePeakDbLevel);
-  }
-
-  // Fill empty pixels with linear interpolation
-  auto interpolateGaps = [&](std::vector<float> &arr, int w) {
-    int lastValid = -1;
-    for (int x = 0; x <= w; ++x) {
-      if (arr[x] > -99.9f) {
-        if (lastValid != -1 && x - lastValid > 1) {
-          float startVal = arr[lastValid];
-          float endVal = arr[x];
-          for (int j = lastValid + 1; j < x; ++j) {
-            float t = (float)(j - lastValid) / (x - lastValid);
-            arr[j] = startVal + t * (endVal - startVal);
-          }
-        }
-        lastValid = x;
-      }
-    }
-    if (lastValid != -1 && lastValid < w) {
-      for (int j = lastValid + 1; j <= w; ++j)
-        arr[j] = arr[lastValid];
-    }
-    int firstValid = 0;
-    while (firstValid <= w && arr[firstValid] <= -99.9f)
-      firstValid++;
-    if (firstValid <= w && firstValid > 0) {
-      for (int j = 0; j < firstValid; ++j)
-        arr[j] = arr[firstValid];
-    }
-  };
-
-  interpolateGaps(pixelLiveMax, juce::roundToInt(width));
-  interpolateGaps(pixelPeakMax, juce::roundToInt(width));
-  interpolateGaps(pixelLiveHann, juce::roundToInt(width));
-  interpolateGaps(pixelTruePeak, juce::roundToInt(width));
-
-  // Visual smoothing pass (Moving Average) to round out the straight lines in
-  // the low end
-  auto smoothArray = [&](std::vector<float> &arr, int w, int radius) {
-    std::vector<float> temp = arr;
-    for (int x = 0; x <= w; ++x) {
-      float sum = 0.0f;
-      int count = 0;
-      for (int k = -radius; k <= radius; ++k) {
-        int idx = juce::jlimit(0, w, x + k);
-        sum += temp[idx];
-        count++;
-      }
-      arr[x] = sum / count;
-    }
-  };
-
-  // Apply a 5-pixel radius visual smoothing
-  smoothArray(pixelLiveMax, juce::roundToInt(width), 5);
-  smoothArray(pixelPeakMax, juce::roundToInt(width), 5);
-  smoothArray(pixelLiveHann, juce::roundToInt(width), 5);
-  smoothArray(pixelTruePeak, juce::roundToInt(width), 5);
-
-  std::vector<float> pixelSmoothedMax = pixelPeakMax;
-  // Apply a 40-pixel radius visual smoothing to create the 'General Shape'
-  // contour
-  smoothArray(pixelSmoothedMax, juce::roundToInt(width), 40);
-
-  std::vector<float> pixelSmoothedTruePeak = pixelTruePeak;
-  smoothArray(pixelSmoothedTruePeak, juce::roundToInt(width), 40);
-
   juce::Path smoothedPath;
-  first = true;
 
-  for (int x = 0; x <= juce::roundToInt(width); ++x) {
-    float dbLevel = pixelLiveMax[x];
-    float peakDbLevel = pixelPeakMax[x];
-    float smoothedDbLevel = pixelSmoothedMax[x];
-    float hannDbLevel = pixelLiveHann[x];
-    float truePeakDbLevel = pixelSmoothedTruePeak[x];
+  if (isSmoothingEnabled) {
+    std::vector<float> pixelLiveMax(juce::roundToInt(width) + 1, -100.0f);
+    std::vector<float> pixelPeakMax(juce::roundToInt(width) + 1,
+                                    -100.0f); // Average
+    std::vector<float> pixelLiveHann(juce::roundToInt(width) + 1, -100.0f);
+    std::vector<float> pixelTruePeak(juce::roundToInt(width) + 1, -100.0f);
 
-    float level = juce::jmap(juce::jlimit(minDecibels, maxDecibels, dbLevel),
-                             minDecibels, maxDecibels, 0.0f, 1.0f);
-    float y = bottom - level * height;
+    float binFreq =
+        (float)audioProcessor.getSampleRate() / (float)currentFftSize;
 
-    float peakLevel =
-        juce::jmap(juce::jlimit(minDecibels, maxDecibels, peakDbLevel),
-                   minDecibels, maxDecibels, 0.0f, 1.0f);
-    float peakY = bottom - peakLevel * height;
+    for (int i = 1; i < currentFftSize / 2; ++i) {
+      float freq = binFreq * (float)i;
+      if (freq < minFreq)
+        continue;
+      if (freq > maxFreq)
+        break;
 
-    float smoothedLevel =
-        juce::jmap(juce::jlimit(minDecibels, maxDecibels, smoothedDbLevel),
-                   minDecibels, maxDecibels, 0.0f, 1.0f);
-    float smoothedY = bottom - smoothedLevel * height;
+      float normFreq =
+          (std::log10(freq) - minLogFreq) / (maxLogFreq - minLogFreq);
+      float xPos = width * std::pow(normFreq, skewFactor);
+      int xPixel =
+          juce::jlimit(0, juce::roundToInt(width), juce::roundToInt(xPos));
 
-    float hannLevel =
-        juce::jmap(juce::jlimit(minDecibels, maxDecibels, hannDbLevel),
-                   minDecibels, maxDecibels, 0.0f, 1.0f);
-    float hannY = bottom - hannLevel * height;
+      float tilt = isTiltEnabled ? 4.5f * std::log2(freq / 1000.0f) : 0.0f;
 
-    float truePeakLevel =
-        juce::jmap(juce::jlimit(minDecibels, maxDecibels, truePeakDbLevel),
-                   minDecibels, maxDecibels, 0.0f, 1.0f);
-    float truePeakY = bottom - truePeakLevel * height;
+      float rawDb = juce::Decibels::gainToDecibels(scopeData[i], -100.0f);
+      float dbLevel = rawDb > -99.9f ? rawDb + tilt : -100.0f;
 
-    if (first) {
-      spectrumPath.startNewSubPath(left + x, y);
-      peakPath.startNewSubPath(left + x, peakY);
-      smoothedPath.startNewSubPath(left + x, smoothedY);
-      hannPath.startNewSubPath(left + x, hannY);
-      maxPeakPath.startNewSubPath(left + x, truePeakY);
-      first = false;
-    } else {
-      spectrumPath.lineTo(left + x, y);
-      peakPath.lineTo(left + x, peakY);
-      smoothedPath.lineTo(left + x, smoothedY);
-      hannPath.lineTo(left + x, hannY);
-      maxPeakPath.lineTo(left + x, truePeakY);
+      float rawPeakDb =
+          juce::Decibels::gainToDecibels(representativeCurve[i], -100.0f);
+      float peakDbLevel = rawPeakDb > -99.9f ? rawPeakDb + tilt : -100.0f;
+
+      float rawHannDb =
+          juce::Decibels::gainToDecibels(scopeDataHann[i], -100.0f);
+      float hannDbLevel = rawHannDb > -99.9f ? rawHannDb + tilt : -100.0f;
+
+      float rawTruePeakDb =
+          juce::Decibels::gainToDecibels(maxPeakCurve[i], -100.0f);
+      float truePeakDbLevel =
+          rawTruePeakDb > -99.9f ? rawTruePeakDb + tilt : -100.0f;
+
+      pixelLiveMax[xPixel] = juce::jmax(pixelLiveMax[xPixel], dbLevel);
+      pixelPeakMax[xPixel] = juce::jmax(pixelPeakMax[xPixel], peakDbLevel);
+      pixelLiveHann[xPixel] = juce::jmax(pixelLiveHann[xPixel], hannDbLevel);
+      pixelTruePeak[xPixel] =
+          juce::jmax(pixelTruePeak[xPixel], truePeakDbLevel);
+    }
+
+    // Fill empty pixels with linear interpolation
+    auto interpolateGaps = [&](std::vector<float> &arr, int w) {
+      int lastValid = -1;
+      for (int x = 0; x <= w; ++x) {
+        if (arr[x] > -99.9f) {
+          if (lastValid != -1 && x - lastValid > 1) {
+            float startVal = arr[lastValid];
+            float endVal = arr[x];
+            for (int j = lastValid + 1; j < x; ++j) {
+              float t = (float)(j - lastValid) / (x - lastValid);
+              arr[j] = startVal + t * (endVal - startVal);
+            }
+          }
+          lastValid = x;
+        }
+      }
+      if (lastValid != -1 && lastValid < w) {
+        for (int j = lastValid + 1; j <= w; ++j)
+          arr[j] = arr[lastValid];
+      }
+      int firstValid = 0;
+      while (firstValid <= w && arr[firstValid] <= -99.9f)
+        firstValid++;
+      if (firstValid <= w && firstValid > 0) {
+        for (int j = 0; j < firstValid; ++j)
+          arr[j] = arr[firstValid];
+      }
+    };
+
+    interpolateGaps(pixelLiveMax, juce::roundToInt(width));
+    interpolateGaps(pixelPeakMax, juce::roundToInt(width));
+    interpolateGaps(pixelLiveHann, juce::roundToInt(width));
+    interpolateGaps(pixelTruePeak, juce::roundToInt(width));
+
+    // Visual smoothing pass (Moving Average) to round out the straight lines in
+    // the low end
+    auto smoothArray = [&](std::vector<float> &arr, int w, int radius) {
+      std::vector<float> temp = arr;
+      for (int x = 0; x <= w; ++x) {
+        float sum = 0.0f;
+        int count = 0;
+        for (int k = -radius; k <= radius; ++k) {
+          int idx = juce::jlimit(0, w, x + k);
+          sum += temp[idx];
+          count++;
+        }
+        arr[x] = sum / count;
+      }
+    };
+
+    // Apply a 5-pixel radius visual smoothing
+    smoothArray(pixelLiveMax, juce::roundToInt(width), 5);
+    smoothArray(pixelPeakMax, juce::roundToInt(width), 5);
+    smoothArray(pixelLiveHann, juce::roundToInt(width), 5);
+    smoothArray(pixelTruePeak, juce::roundToInt(width), 5);
+
+    std::vector<float> pixelSmoothedMax = pixelPeakMax;
+    // Apply a 40-pixel radius visual smoothing to create the 'General Shape'
+    // contour
+    smoothArray(pixelSmoothedMax, juce::roundToInt(width), 40);
+
+    std::vector<float> pixelSmoothedTruePeak = pixelTruePeak;
+    smoothArray(pixelSmoothedTruePeak, juce::roundToInt(width), 40);
+
+    bool first = true;
+
+    for (int x = 0; x <= juce::roundToInt(width); ++x) {
+      float dbLevel = pixelLiveMax[x];
+      float peakDbLevel = pixelPeakMax[x];
+      float smoothedDbLevel = pixelSmoothedMax[x];
+      float hannDbLevel = pixelLiveHann[x];
+      float truePeakDbLevel = pixelSmoothedTruePeak[x];
+
+      float level = juce::jmap(juce::jlimit(minDecibels, maxDecibels, dbLevel),
+                               minDecibels, maxDecibels, 0.0f, 1.0f);
+      float y = bottom - level * height;
+
+      float peakLevel =
+          juce::jmap(juce::jlimit(minDecibels, maxDecibels, peakDbLevel),
+                     minDecibels, maxDecibels, 0.0f, 1.0f);
+      float peakY = bottom - peakLevel * height;
+
+      float smoothedLevel =
+          juce::jmap(juce::jlimit(minDecibels, maxDecibels, smoothedDbLevel),
+                     minDecibels, maxDecibels, 0.0f, 1.0f);
+      float smoothedY = bottom - smoothedLevel * height;
+
+      float hannLevel =
+          juce::jmap(juce::jlimit(minDecibels, maxDecibels, hannDbLevel),
+                     minDecibels, maxDecibels, 0.0f, 1.0f);
+      float hannY = bottom - hannLevel * height;
+
+      float truePeakLevel =
+          juce::jmap(juce::jlimit(minDecibels, maxDecibels, truePeakDbLevel),
+                     minDecibels, maxDecibels, 0.0f, 1.0f);
+      float truePeakY = bottom - truePeakLevel * height;
+
+      if (first) {
+        spectrumPath.startNewSubPath(left + x, y);
+        peakPath.startNewSubPath(left + x, peakY);
+        smoothedPath.startNewSubPath(left + x, smoothedY);
+        hannPath.startNewSubPath(left + x, hannY);
+        maxPeakPath.startNewSubPath(left + x, truePeakY);
+        first = false;
+      } else {
+        spectrumPath.lineTo(left + x, y);
+        peakPath.lineTo(left + x, peakY);
+        smoothedPath.lineTo(left + x, smoothedY);
+        hannPath.lineTo(left + x, hannY);
+        maxPeakPath.lineTo(left + x, truePeakY);
+      }
+    }
+  } else {
+    // RAW / High Resolution Mode
+    float binFreq =
+        (float)audioProcessor.getSampleRate() / (float)currentFftSize;
+    bool firstPoint = true;
+
+    for (int i = 1; i < currentFftSize / 2; ++i) {
+      float freq = binFreq * (float)i;
+      if (freq < minFreq)
+        continue;
+      if (freq > maxFreq)
+        break;
+
+      float normFreq =
+          (std::log10(freq) - minLogFreq) / (maxLogFreq - minLogFreq);
+      float xPos = left + width * std::pow(normFreq, skewFactor);
+      float tilt = isTiltEnabled ? 4.5f * std::log2(freq / 1000.0f) : 0.0f;
+
+      auto getDbY = [&](float rawVal) {
+        float rawDb = juce::Decibels::gainToDecibels(rawVal, -100.0f);
+        float dbLevel = rawDb > -99.9f ? rawDb + tilt : -100.0f;
+        float level =
+            juce::jmap(juce::jlimit(minDecibels, maxDecibels, dbLevel),
+                       minDecibels, maxDecibels, 0.0f, 1.0f);
+        return bottom - level * height;
+      };
+
+      float y = getDbY(scopeData[i]);
+      float peakY = getDbY(representativeCurve[i]);
+      float hannY = getDbY(scopeDataHann[i]);
+      float truePeakY = getDbY(maxPeakCurve[i]);
+
+      // User explicitly requested the general contour to be raw as well when
+      // smoothed is off
+      float smoothedY = peakY;
+
+      if (firstPoint) {
+        spectrumPath.startNewSubPath(xPos, y);
+        peakPath.startNewSubPath(xPos, peakY);
+        smoothedPath.startNewSubPath(xPos, smoothedY);
+        hannPath.startNewSubPath(xPos, hannY);
+        maxPeakPath.startNewSubPath(xPos, truePeakY);
+        firstPoint = false;
+      } else {
+        spectrumPath.lineTo(xPos, y);
+        peakPath.lineTo(xPos, peakY);
+        smoothedPath.lineTo(xPos, smoothedY);
+        hannPath.lineTo(xPos, hannY);
+        maxPeakPath.lineTo(xPos, truePeakY);
+      }
     }
   }
 
@@ -1043,7 +1101,7 @@ void MondoEqRefAudioProcessorEditor::paint(juce::Graphics &g) {
     g.drawText(text, textX, textY, textWidth, 22, juce::Justification::centred,
                false);
   }
-  
+
   g.restoreState();
 
   // 5. Draw Crest Factor Metrics at the top
@@ -1117,8 +1175,10 @@ void MondoEqRefAudioProcessorEditor::paint(juce::Graphics &g) {
       g.fillRoundedRectangle(barArea.toFloat(), 4.0f);
 
       auto mapToX = [&](float val) {
-          float mapped = juce::jmap(val, 0.0f, 25.0f, 0.0f, (float)barArea.getWidth());
-          return barArea.getX() + juce::jlimit(0.0f, (float)barArea.getWidth(), mapped);
+        float mapped =
+            juce::jmap(val, 0.0f, 25.0f, 0.0f, (float)barArea.getWidth());
+        return barArea.getX() +
+               juce::jlimit(0.0f, (float)barArea.getWidth(), mapped);
       };
 
       float xMin = mapToX(minTarget);
@@ -1126,16 +1186,20 @@ void MondoEqRefAudioProcessorEditor::paint(juce::Graphics &g) {
       float xCf = mapToX(cf);
 
       bool inRange = (cf >= minTarget && cf <= maxTarget);
-      juce::Colour rangeColor = inRange ? juce::Colours::lightgreen : juce::Colours::lightyellow;
+      juce::Colour rangeColor =
+          inRange ? juce::Colours::lightgreen : juce::Colours::lightyellow;
 
       if (xMax > xMin) {
-          juce::Rectangle<float> rangeRect(xMin, (float)barArea.getY() + 1.0f, xMax - xMin, (float)barArea.getHeight() - 2.0f);
-          g.setColour(rangeColor.withAlpha(0.8f));
-          g.fillRoundedRectangle(rangeRect, 3.0f);
+        juce::Rectangle<float> rangeRect(xMin, (float)barArea.getY() + 1.0f,
+                                         xMax - xMin,
+                                         (float)barArea.getHeight() - 2.0f);
+        g.setColour(rangeColor.withAlpha(0.8f));
+        g.fillRoundedRectangle(rangeRect, 3.0f);
       }
 
       g.setColour(juce::Colours::white);
-      g.fillRect(xCf - 1.0f, (float)barArea.getY(), 2.0f, (float)barArea.getHeight());
+      g.fillRect(xCf - 1.0f, (float)barArea.getY(), 2.0f,
+                 (float)barArea.getHeight());
     };
 
     juce::Rectangle<int> r1(crestFactorArea.getX(), crestFactorArea.getY(),
@@ -1310,15 +1374,17 @@ void MondoEqRefAudioProcessorEditor::loadSettings() {
 }
 
 void MondoEqRefAudioProcessorEditor::resized() {
-  fftSizeLabel.setBounds(10, 5, 80, 20);
-  fftSizeBox.setBounds(fftSizeLabel.getRight() + 5, 5, 100, 20);
+  audioProcessor.editorWidth = getWidth();
+  audioProcessor.editorHeight = getHeight();
 
+  fftSizeBox.setBounds(5, 5, 100, 20);
   targetRoleLabel.setBounds(fftSizeBox.getRight() + 20, 5, 50, 20);
-  targetRoleBox.setBounds(targetRoleLabel.getRight() + 5, 5, 200, 20);
-  resetButton.setBounds(targetRoleBox.getRight() + 20, 5, 80, 20);
+  targetRoleBox.setBounds(targetRoleLabel.getRight() + 5, 5, 150, 20);
+  resetButton.setBounds(targetRoleBox.getRight() + 20, 5, 40, 20);
   autoResetButton.setBounds(resetButton.getRight() + 5, 5, 50, 20);
-  tiltButton.setBounds(autoResetButton.getRight() + 20, 5, 120, 20);
-  reloadTargetsButton.setBounds(tiltButton.getRight() + 20, 5, 80, 20);
+  tiltButton.setBounds(autoResetButton.getRight() + 20, 5, 90, 20);
+  smoothButton.setBounds(tiltButton.getRight() + 8, 5, 80, 20);
+  reloadTargetsButton.setBounds(smoothButton.getRight() + 20, 5, 80, 20);
 
   // Position targetOffsetSlider vertically on the left
   auto fullArea = getLocalBounds();
@@ -1424,7 +1490,7 @@ void MondoEqRefAudioProcessorEditor::mouseUp(const juce::MouseEvent &event) {
     }
     repaint();
   }
-  
+
   isDragging = false;
 }
 

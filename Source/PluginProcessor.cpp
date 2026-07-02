@@ -137,10 +137,12 @@ void MondoEqRefAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
 
     if (totalNumInputChannels > 0)
     {
-        auto* channelData = buffer.getReadPointer (0);
+        auto* channelDataL = buffer.getReadPointer (0);
+        auto* channelDataR = (totalNumInputChannels > 1) ? buffer.getReadPointer (1) : nullptr;
         for (int i = 0; i < buffer.getNumSamples(); ++i)
         {
-            pushNextSampleIntoFifo(channelData[i]);
+            float sample = channelDataR ? (channelDataL[i] + channelDataR[i]) * 0.5f : channelDataL[i];
+            pushNextSampleIntoFifo(sample);
         }
         
         // LUFS Calculation (EBU R 128)
@@ -217,10 +219,19 @@ juce::AudioProcessorEditor* MondoEqRefAudioProcessor::createEditor()
 
 void MondoEqRefAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
+    juce::XmlElement xml("MONDOEQREF_SETTINGS");
+    xml.setAttribute("width", editorWidth);
+    xml.setAttribute("height", editorHeight);
+    copyXmlToBinary(xml, destData);
 }
 
 void MondoEqRefAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
+    std::unique_ptr<juce::XmlElement> xmlState(getXmlFromBinary(data, sizeInBytes));
+    if (xmlState != nullptr && xmlState->hasTagName("MONDOEQREF_SETTINGS")) {
+        editorWidth = xmlState->getIntAttribute("width", 1200);
+        editorHeight = xmlState->getIntAttribute("height", 450);
+    }
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

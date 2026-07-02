@@ -371,6 +371,8 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
         if (denseProcessedCh >= 0 && denseProcessedCh < bufferToFill.buffer->getNumChannels())
         {
             spectralBuffer.copyFrom(0, 0, *bufferToFill.buffer, denseProcessedCh, bufferToFill.startSample, bufferToFill.numSamples);
+            if (denseProcessedCh + 1 < bufferToFill.buffer->getNumChannels())
+                spectralBuffer.copyFrom(1, 0, *bufferToFill.buffer, denseProcessedCh + 1, bufferToFill.startSample, bufferToFill.numSamples);
         }
 
         // Limpiar el buffer físico principal para que el ruido no salga por los monitores principales
@@ -384,7 +386,7 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
         {
             bufferToFill.buffer->addFrom(denseOutCh, bufferToFill.startSample, spectralBuffer, 0, 0, spectralBuffer.getNumSamples());
             // Opcional: si la salida es un par estéreo, enviamos por el derecho también
-            if (denseOutCh + 1 < bufferToFill.buffer->getNumChannels())
+            if (routingManager.lastUsedProfile.isDualMonoSend && denseOutCh + 1 < bufferToFill.buffer->getNumChannels())
                 bufferToFill.buffer->addFrom(denseOutCh + 1, bufferToFill.startSample, spectralBuffer, 1, 0, spectralBuffer.getNumSamples());
         }
 
@@ -412,7 +414,10 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
         if (denseProcessedCh >= 0 && denseProcessedCh < bufferToFill.buffer->getNumChannels())
         {
             eqInput.copyFrom(0, 0, *bufferToFill.buffer, denseProcessedCh, bufferToFill.startSample, bufferToFill.numSamples);
-            eqInput.copyFrom(1, 0, *bufferToFill.buffer, denseProcessedCh, bufferToFill.startSample, bufferToFill.numSamples);
+            if (denseProcessedCh + 1 < bufferToFill.buffer->getNumChannels())
+                eqInput.copyFrom(1, 0, *bufferToFill.buffer, denseProcessedCh + 1, bufferToFill.startSample, bufferToFill.numSamples);
+            else
+                eqInput.copyFrom(1, 0, *bufferToFill.buffer, denseProcessedCh, bufferToFill.startSample, bufferToFill.numSamples);
         }
         
         bufferToFill.clearActiveBufferRegion(); // Clear physical input from outputs
@@ -437,7 +442,7 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
         {
             bufferToFill.buffer->addFrom(denseOutCh, bufferToFill.startSample, dryDiBuffer, 0, 0, dryDiBuffer.getNumSamples());
             // Optionally output to right channel too if user selects a stereo pair for reamping
-            if (denseOutCh + 1 < bufferToFill.buffer->getNumChannels())
+            if (routingManager.lastUsedProfile.isDualMonoSend && denseOutCh + 1 < bufferToFill.buffer->getNumChannels())
                 bufferToFill.buffer->addFrom(denseOutCh + 1, bufferToFill.startSample, dryDiBuffer, 0, 0, dryDiBuffer.getNumSamples());
         }
 
@@ -446,7 +451,10 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
         if (denseProcessedCh >= 0 && denseProcessedCh < bufferToFill.buffer->getNumChannels())
         {
             eqInput.copyFrom(0, 0, *bufferToFill.buffer, denseProcessedCh, bufferToFill.startSample, bufferToFill.numSamples);
-            eqInput.copyFrom(1, 0, *bufferToFill.buffer, denseProcessedCh, bufferToFill.startSample, bufferToFill.numSamples);
+            if (denseProcessedCh + 1 < bufferToFill.buffer->getNumChannels())
+                eqInput.copyFrom(1, 0, *bufferToFill.buffer, denseProcessedCh + 1, bufferToFill.startSample, bufferToFill.numSamples);
+            else
+                eqInput.copyFrom(1, 0, *bufferToFill.buffer, denseProcessedCh, bufferToFill.startSample, bufferToFill.numSamples);
         }
         
         // Clear the physical inputs from the final output buffer so we do not create a feedback loop
@@ -456,7 +464,7 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
         if (denseOutCh >= 0 && denseOutCh < bufferToFill.buffer->getNumChannels())
         {
             bufferToFill.buffer->addFrom(denseOutCh, bufferToFill.startSample, dryDiBuffer, 0, 0, dryDiBuffer.getNumSamples());
-            if (denseOutCh + 1 < bufferToFill.buffer->getNumChannels())
+            if (routingManager.lastUsedProfile.isDualMonoSend && denseOutCh + 1 < bufferToFill.buffer->getNumChannels())
                 bufferToFill.buffer->addFrom(denseOutCh + 1, bufferToFill.startSample, dryDiBuffer, 0, 0, dryDiBuffer.getNumSamples());
         }
 

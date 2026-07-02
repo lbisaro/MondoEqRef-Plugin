@@ -42,6 +42,9 @@ public:
     
     juce::File stemDirectory;
 
+    int editorWidth = 1200;
+    int editorHeight = 450;
+
     void pushNextSampleIntoFifo (float sample);
 
     // EBU R 128 LUFS Measurement

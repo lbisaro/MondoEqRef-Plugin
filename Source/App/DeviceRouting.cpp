@@ -9,6 +9,7 @@ juce::var DeviceAudioProfile::toVar() const
     obj->setProperty("processedInputChannel", processedInputChannel);
     obj->setProperty("diInputChannel", diInputChannel);
     obj->setProperty("outputChannel", outputChannel);
+    obj->setProperty("isDualMonoSend", isDualMonoSend);
     
     obj->setProperty("activeInputChannels", activeInputChannels);
     obj->setProperty("activeOutputChannels", activeOutputChannels);
@@ -32,6 +33,8 @@ void DeviceAudioProfile::fromVar(const juce::var& v)
         processedInputChannel = obj->getProperty("processedInputChannel");
         diInputChannel = obj->getProperty("diInputChannel");
         outputChannel = obj->getProperty("outputChannel");
+        if (obj->hasProperty("isDualMonoSend"))
+            isDualMonoSend = obj->getProperty("isDualMonoSend");
         
         if (obj->hasProperty("activeInputChannels"))
             activeInputChannels = obj->getProperty("activeInputChannels").toString();

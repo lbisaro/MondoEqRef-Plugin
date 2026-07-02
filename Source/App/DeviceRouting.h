@@ -11,6 +11,7 @@ struct DeviceAudioProfile
     int processedInputChannel = 0;
     int diInputChannel = 1;
     int outputChannel = 0;
+    bool isDualMonoSend = false;
     
     juce::String activeInputChannels;
     juce::String activeOutputChannels;

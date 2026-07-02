@@ -1,42 +1,62 @@
 #include "MondoSpectralRefEditor.h"
 
-MondoSpectralRefEditor::MondoSpectralRefEditor (MondoSpectralRefAudioProcessor& p)
-    : AudioProcessorEditor (&p), audioProcessor (p)
-{
-    setSize (800, 600);
-    
-    addAndMakeVisible(normalizeButton);
-    normalizeButton.onClick = [this] { audioProcessor.triggerNormalize = true; };
-    
-    addAndMakeVisible(zoomHzButton);
-    zoomHzButton.onClick = [this] { isZoomedHz = !isZoomedHz; repaint(); };
-    
-    startTimerHz(30);
+MondoSpectralRefEditor::MondoSpectralRefEditor(
+    MondoSpectralRefAudioProcessor &p)
+    : AudioProcessorEditor(&p), audioProcessor(p) {
+  setSize(800, 600);
+
+  addAndMakeVisible(normalizeButton);
+  normalizeButton.onClick = [this] { audioProcessor.triggerNormalize = true; };
+
+  addAndMakeVisible(zoomHzButton);
+  zoomHzButton.onClick = [this]() {
+    isZoomedHz = !isZoomedHz;
+    zoomHzButton.setButtonText(isZoomedHz ? "Unzoom Hz" : "Zoom Hz 50-10K");
+    repaint();
+  };
+
+  addAndMakeVisible(channelComboBox);
+  channelComboBox.addItem("L+R (Avg)", 1);
+  channelComboBox.addItem("Left", 2);
+  channelComboBox.addItem("Right", 3);
+  channelComboBox.setSelectedId(audioProcessor.analyzeChannelMode.load() + 1,
+                                juce::dontSendNotification);
+  channelComboBox.onChange = [this]() {
+    audioProcessor.analyzeChannelMode.store(channelComboBox.getSelectedId() -
+                                            1);
+  };
+
+  loadAnalyzerBands();
+
+  startTimerHz(60);
 }
 
 MondoSpectralRefEditor::~MondoSpectralRefEditor() {}
 
-void MondoSpectralRefEditor::timerCallback()
-{
-    audioProcessor.calculateTransferFunction();
-    
-    if (audioProcessor.isNormalized.load()) {
-        normalizeButton.setColour(juce::TextButton::buttonColourId, juce::Colours::orange);
-        normalizeButton.setColour(juce::TextButton::textColourOffId, juce::Colours::black);
-    } else {
-        normalizeButton.removeColour(juce::TextButton::buttonColourId);
-        normalizeButton.removeColour(juce::TextButton::textColourOffId);
-    }
-    
-    if (isZoomedHz) {
-        zoomHzButton.setColour(juce::TextButton::buttonColourId, juce::Colours::orange);
-        zoomHzButton.setColour(juce::TextButton::textColourOffId, juce::Colours::black);
-    } else {
-        zoomHzButton.removeColour(juce::TextButton::buttonColourId);
-        zoomHzButton.removeColour(juce::TextButton::textColourOffId);
-    }
-    
-    repaint();
+void MondoSpectralRefEditor::timerCallback() {
+  audioProcessor.calculateTransferFunction();
+
+  if (audioProcessor.isNormalized.load()) {
+    normalizeButton.setColour(juce::TextButton::buttonColourId,
+                              juce::Colours::orange);
+    normalizeButton.setColour(juce::TextButton::textColourOffId,
+                              juce::Colours::black);
+  } else {
+    normalizeButton.removeColour(juce::TextButton::buttonColourId);
+    normalizeButton.removeColour(juce::TextButton::textColourOffId);
+  }
+
+  if (isZoomedHz) {
+    zoomHzButton.setColour(juce::TextButton::buttonColourId,
+                           juce::Colours::orange);
+    zoomHzButton.setColour(juce::TextButton::textColourOffId,
+                           juce::Colours::black);
+  } else {
+    zoomHzButton.removeColour(juce::TextButton::buttonColourId);
+    zoomHzButton.removeColour(juce::TextButton::textColourOffId);
+  }
+
+  repaint();
 }
 
 void MondoSpectralRefEditor::paint(juce::Graphics &g) {
@@ -68,7 +88,8 @@ void MondoSpectralRefEditor::paint(juce::Graphics &g) {
   std::array<float, 9> freqs = {20.0f,   50.0f,   100.0f,  200.0f,  500.0f,
                                 1000.0f, 2000.0f, 5000.0f, 10000.0f};
   for (float f : freqs) {
-    if (f < minFreq || f > maxFreq) continue;
+    if (f < minFreq || f > maxFreq)
+      continue;
     float normX = (std::log10(f) - minLogFreq) / (maxLogFreq - minLogFreq);
     float x = left + width * std::pow(normX, skewFactor);
     g.drawVerticalLine(juce::roundToInt(x), (float)plotArea.getY(), bottom);
@@ -80,18 +101,6 @@ void MondoSpectralRefEditor::paint(juce::Graphics &g) {
                juce::Justification::centredTop, false);
     g.setColour(juce::Colours::white.withAlpha(0.1f));
   }
-
-  // Custom 300Hz and 2000Hz soft guidelines
-  auto drawCrossoverLine = [&](float f) {
-    float normX = (std::log10(f) - minLogFreq) / (maxLogFreq - minLogFreq);
-    float x = left + width * std::pow(normX, skewFactor);
-    g.setColour(juce::Colours::yellow.withAlpha(0.3f));
-    const float dashes[] = {4.0f, 4.0f};
-    g.drawDashedLine(juce::Line<float>(x, (float)plotArea.getY(), x, bottom),
-                     dashes, 2, 1.5f);
-  };
-  if (300.0f >= minFreq && 300.0f <= maxFreq) drawCrossoverLine(300.0f);
-  if (2000.0f >= minFreq && 2000.0f <= maxFreq) drawCrossoverLine(2000.0f);
 
   // dB grid
   for (float db = -120.0f; db <= 48.0f; db += 6.0f) {
@@ -108,6 +117,49 @@ void MondoSpectralRefEditor::paint(juce::Graphics &g) {
     g.drawText(dbText, (int)plotArea.getRight() + 5, (int)y - 10, 30, 20,
                juce::Justification::centredLeft, false);
     g.setColour(juce::Colours::white.withAlpha(0.1f));
+  }
+
+  activeBandTooltips.clear();
+  float stackY = (float)plotArea.getY() + 4.0f;
+
+  for (const auto &band : analyzerBands) {
+    float normX1 = (std::log10(juce::jlimit(minFreq, maxFreq, band.minFreq)) -
+                    minLogFreq) /
+                   (maxLogFreq - minLogFreq);
+    float normX2 = (std::log10(juce::jlimit(minFreq, maxFreq, band.maxFreq)) -
+                    minLogFreq) /
+                   (maxLogFreq - minLogFreq);
+
+    float x1 = left + width * std::pow(normX1, skewFactor);
+    float x2 = left + width * std::pow(normX2, skewFactor);
+
+    if (x2 > x1) {
+      float bandWidth = x2 - x1;
+      float bandHeight = 16.0f;
+
+      juce::Rectangle<float> bandRect(x1, stackY, bandWidth, bandHeight);
+
+      if (band.tip.isNotEmpty()) {
+        activeBandTooltips.push_back({bandRect, band.name + "\n" + band.tip});
+      }
+
+      g.setColour(band.color.withAlpha(0.6f));
+      g.fillRect(bandRect);
+
+      g.setColour(band.color);
+      g.drawRect(bandRect, 1.0f);
+
+      g.setColour(band.color.withAlpha(0.9f));
+      g.drawVerticalLine(juce::roundToInt(x1), stackY + bandHeight, bottom);
+      g.drawVerticalLine(juce::roundToInt(x2), stackY + bandHeight, bottom);
+
+      g.setColour(juce::Colours::white);
+      g.setFont(12.0f);
+      g.drawText(band.name, bandRect.toNearestInt(),
+                 juce::Justification::centred, true);
+
+      stackY += bandHeight + 2.0f;
+    }
   }
 
   // Map curve
@@ -262,13 +314,13 @@ void MondoSpectralRefEditor::paint(juce::Graphics &g) {
   }
 }
 
-void MondoSpectralRefEditor::resized()
-{
-    auto area = getLocalBounds();
-    auto header = area.removeFromTop(40);
-    int center = header.getWidth() / 2;
-    normalizeButton.setBounds(center - 125, 8, 120, 24);
-    zoomHzButton.setBounds(center + 5, 8, 120, 24);
+void MondoSpectralRefEditor::resized() {
+  auto area = getLocalBounds();
+  auto header = area.removeFromTop(40);
+  int center = header.getWidth() / 2;
+  channelComboBox.setBounds(center - 255, 8, 120, 24);
+  normalizeButton.setBounds(center - 125, 8, 120, 24);
+  zoomHzButton.setBounds(center + 5, 8, 120, 24);
 }
 
 // --- Mouse Events ---
@@ -397,4 +449,58 @@ void MondoSpectralRefEditor::mouseExit(const juce::MouseEvent &event) {
   }
 }
 
-juce::String MondoSpectralRefEditor::getTooltip() { return ""; }
+juce::String MondoSpectralRefEditor::getTooltip() {
+  if (!isMouseOverPlot)
+    return "";
+  for (const auto &b : activeBandTooltips) {
+    if (b.first.contains(mousePos.toFloat())) {
+      return b.second;
+    }
+  }
+  return "";
+}
+
+void MondoSpectralRefEditor::loadAnalyzerBands() {
+  analyzerBands.clear();
+
+  juce::File dataFile;
+#if JUCE_WINDOWS
+  dataFile =
+      juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+          .getParentDirectory()
+          .getChildFile("Local")
+          .getChildFile("MondoEqRef")
+          .getChildFile("ir_analizer.json");
+#else
+  dataFile =
+      juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+          .getChildFile("MondoEqRef")
+          .getChildFile("ir_analizer.json");
+#endif
+
+  if (dataFile.existsAsFile()) {
+    auto parsedJson = juce::JSON::parse(dataFile);
+    if (parsedJson.isArray()) {
+      auto *arr = parsedJson.getArray();
+      for (auto &item : *arr) {
+        if (item.isObject()) {
+          auto *obj = item.getDynamicObject();
+          IRAnalyzerBand band;
+          if (obj->hasProperty("name"))
+            band.name = obj->getProperty("name").toString();
+          if (obj->hasProperty("min"))
+            band.minFreq = float(obj->getProperty("min"));
+          if (obj->hasProperty("max"))
+            band.maxFreq = float(obj->getProperty("max"));
+          if (obj->hasProperty("color"))
+            band.color =
+                juce::Colour::fromString(obj->getProperty("color").toString());
+          if (obj->hasProperty("tip"))
+            band.tip = obj->getProperty("tip").toString();
+
+          analyzerBands.push_back(band);
+        }
+      }
+    }
+  }
+}

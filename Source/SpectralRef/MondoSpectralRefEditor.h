@@ -2,6 +2,15 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "MondoSpectralRefProcessor.h"
+#include <juce_data_structures/juce_data_structures.h>
+
+struct IRAnalyzerBand {
+    juce::String name;
+    float minFreq;
+    float maxFreq;
+    juce::Colour color;
+    juce::String tip;
+};
 
 class MondoSpectralRefEditor : public juce::AudioProcessorEditor, public juce::Timer, public juce::TooltipClient
 {
@@ -45,7 +54,12 @@ private:
     
     juce::TextButton normalizeButton { "Normalize a 0dB" };
     juce::TextButton zoomHzButton { "Zoom Hz 50-10K" };
+    juce::ComboBox channelComboBox;
     bool isZoomedHz = false;
+
+    void loadAnalyzerBands();
+    std::vector<IRAnalyzerBand> analyzerBands;
+    std::vector<std::pair<juce::Rectangle<float>, juce::String>> activeBandTooltips;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MondoSpectralRefEditor)
 };

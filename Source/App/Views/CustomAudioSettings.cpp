@@ -22,10 +22,14 @@ CustomAudioSettingsComponent::CustomAudioSettingsComponent(
   outputLabel.setJustificationType(juce::Justification::centredRight);
   addAndMakeVisible(outputCombo);
 
+  addAndMakeVisible(dualMonoToggle);
+  dualMonoToggle.setButtonText("Dual-Mono Send (Helix DSP Sum Fix)");
+
   auto saveLambda = [this]() { saveLogicalRouting(); };
   processedCombo.onChange = saveLambda;
   diCombo.onChange = saveLambda;
   outputCombo.onChange = saveLambda;
+  dualMonoToggle.onClick = saveLambda;
 
   deviceManager.addChangeListener(this);
   populateCombos();
@@ -91,6 +95,8 @@ void CustomAudioSettingsComponent::populateCombos() {
     dSel = profile.diInputChannel + 1;
     oSel = profile.outputChannel + 1;
   }
+  
+  dualMonoToggle.setToggleState(profile.isDualMonoSend, juce::dontSendNotification);
 
   // Ensure selection is valid (exists in the combo)
   if (processedCombo.indexOfItemId(pSel) >= 0)
@@ -154,6 +160,8 @@ void CustomAudioSettingsComponent::saveLogicalRouting() {
   if (outputCombo.getSelectedId() > 0)
     profile.outputChannel = outputCombo.getSelectedId() - 1;
 
+  profile.isDualMonoSend = dualMonoToggle.getToggleState();
+
   routingManager.addOrUpdateProfile(profile);
 }
 
@@ -166,7 +174,7 @@ void CustomAudioSettingsComponent::resized() {
   auto bounds = getLocalBounds();
 
   // Bottom area for custom routing
-  auto bottomArea = bounds.removeFromBottom(120);
+  auto bottomArea = bounds.removeFromBottom(150);
 
   if (nativeSelector)
     nativeSelector->setBounds(bounds);
@@ -189,4 +197,9 @@ void CustomAudioSettingsComponent::resized() {
   auto row3 = bottomArea.removeFromTop(24);
   outputLabel.setBounds(row3.removeFromLeft(120));
   outputCombo.setBounds(row3);
+  
+  bottomArea.removeFromTop(10);
+  auto row4 = bottomArea.removeFromTop(24);
+  row4.removeFromLeft(120); // indent
+  dualMonoToggle.setBounds(row4);
 }
